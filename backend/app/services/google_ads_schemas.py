@@ -48,10 +48,47 @@ class Month(str, Enum):
     NOVEMBER = "NOVEMBER"
     DECEMBER = "DECEMBER"
 
+
+    @classmethod
+    def from_int(cls, month_int: int) -> 'Month':
+        """Converts an integer (1-12) to the corresponding Month enum value."""
+        try:
+            enum_str = _INT_TO_ENUM_MAP[month_int]
+            return cls(enum_str)
+        except KeyError:
+            raise ValueError(f"Invalid month integer: {month_int}. Must be between 1 and 12.")
+
+    @classmethod
+    def to_int(cls, month_enum: 'Month') -> int:
+        """
+                Converts a Month enum value back to its integer (1-12) representation
+                using the pre-computed reverse map.
+                """
+        if month_enum == cls.UNSPECIFIED:
+            raise ValueError("Cannot convert UNSPECIFIED month to integer.")
+
+        # Access the pre-computed reverse map directly from the class
+        month_int = _ENUM_TO_INT_MAP.get(month_enum.value)
+
+        if month_int is None:
+
+            # Should not happen if the enum is used correctly
+            raise ValueError(f"Invalid Month enum value: {month_enum.value}")
+
+        return month_int
+
+# --- Utility for Integer Conversion ---
+_INT_TO_ENUM_MAP = {
+    1: "JANUARY", 2: "FEBRUARY", 3: "MARCH", 4: "APRIL",
+    5: "MAY", 6: "JUNE", 7: "JULY", 8: "AUGUST",
+    9: "SEPTEMBER", 10: "OCTOBER", 11: "NOVEMBER", 12: "DECEMBER"
+}
+_ENUM_TO_INT_MAP = {v: k for k, v in _INT_TO_ENUM_MAP.items()}
+
 class MonthlySearchVolume(BaseModel):
     """
-    A single data point representing the search volume for a specific month and year.
-    """
+        A single data point representing the search volume for a specific month and year.
+        """
     month: Month = Field(..., description="The month of the search volume data.")
     year: int = Field(..., description="The year of the search volume data.")
     search_volume: int = Field(..., alias="monthly_searches", description="The approximate number of searches for the keyword during this month and year.")
