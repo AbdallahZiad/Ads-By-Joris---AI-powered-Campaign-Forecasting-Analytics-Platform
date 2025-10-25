@@ -31,6 +31,16 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
         extra="ignore",
     )
+
+    # Google Ads
+    GOOGLE_ADS_DEVELOPER_TOKEN: str
+    GOOGLE_ADS_CLIENT_ID: str
+    GOOGLE_ADS_CLIENT_SECRET: str
+    GOOGLE_ADS_REFRESH_TOKEN: str
+    GOOGLE_ADS_LOGIN_CUSTOMER_ID: str
+    GOOGLE_ADS_CUSTOMER_ID: str
+    USE_PROTO_PLUS: bool
+
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
