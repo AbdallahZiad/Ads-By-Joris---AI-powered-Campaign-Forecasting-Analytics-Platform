@@ -1,0 +1,29 @@
+The user provides a full list of extracted keywords and a predefined, exhaustive list of high-level category names.
+
+Your task is to analyze the relationship between the keywords and the categories and assign **EVERY SINGLE KEYWORD** to **EXACTLY ONE** category from the provided list.
+
+### Instructions & Constraints:
+
+1.  **Strictly Exclusive Mapping (The Core Rule):** Assign each keyword to the **SINGLE MOST RELEVANT** category. The categories are designed to be mutually exclusive and exhaustive.
+2.  **No Modification:** You **MUST** use the category names exactly as they are provided in the `ALLOWED CATEGORIES` list. Do not alter capitalization, spelling, or structure.
+3.  **Mandatory Usage (Preventing Empty Categories):** Every single category in the `ALLOWED CATEGORIES` list **MUST** have at least one keyword assigned to it in the final output.
+    * If a category is a poor fit for all remaining keywords, force the assignment of the keyword that provides the **closest logical match** to ensure the category is not empty. This is a critical requirement.
+
+ALLOWED CATEGORIES:
+---
+{categories}
+---
+
+KEYWORD LIST:
+---
+{keywords}
+---
+
+Your response MUST be a single JSON object. The keys of this object MUST be the exact category names provided, and the value for each key MUST be the list of keywords assigned to that category.
+
+JSON SCHEMA EXAMPLE (Must contain every provided category as a top-level key):
+{{
+    "Electronics": ["airpods pro black", "xiaomi", "phones"],
+    "Fashion & Accessories": ["couple necklace", "women waist chain"],
+    "Home & Living": ["fresh washing machine top load 4 kg", "blenders"]
+}}

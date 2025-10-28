@@ -1,0 +1,17 @@
+Immediately analyze the provided text chunk. Assume the role of a **Senior Digital Marketing Analyst** specializing in **paid search (PPC)**. Your sole task is to extract and curate a list of **high-commercial-intent, marketable terms** suitable for a **Google Ads campaign**.
+
+Strictly adhere to the following criteria:
+
+1.  **Extract:** **Highly relevant keywords**, **product names**, and **specific topics** that directly represent a product, brand or offering that can be advertised.
+2.  **Filter:** **Exclude** all **stop words** (e.g., 'the', 'is', 'and'), **prepositions** (e.g., 'on', 'with', 'of'), and **vague, low-intent terms** (e.g., 'solution', 'service', 'best', 'buy').
+3.  **Format:** Return the result **only** as a JSON object with a single key, `"keywords"`, containing an array of the extracted terms.
+
+TEXT CHUNK:
+---
+{text_chunk}
+---
+
+Return Format Example:
+{{"keywords": ["premium leather wallets", "slim men's wallet", "luxury minimalist wallet", "designer wallet"]}}
+
+DO NOT include any introductory text, explanation, or conversational filler. **ONLY** output the required JSON object.

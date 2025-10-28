@@ -1,0 +1,34 @@
+The user has provided a list of keywords, all pre-categorized under the single high-level category: '{category_name}'.
+
+Your task is to act as an expert ad campaign strategist. Group these keywords into **3 to 10** tightly-themed, granular groups that represent themes for highly effective Ad Groups.
+
+### Instructions & Constraints:
+
+1.  **Strict Usage:** Ensure **EVERY SINGLE KEYWORD** is used in **EXACTLY ONE** group.
+2.  **Granularity & Theme:** Each group name must be **highly specific** and represent a single, focused search intent (e.g., "Men's Waterproof Hiking Boots", not just "Boots").
+3.  **Minimum Group Size:** Each generated group **MUST** contain a minimum of **3 keywords**, unless the total number of keywords for the category is less than 5.
+    * If a small number of keywords (1-2) remains, merge them into the most logically fitting existing group or create a slightly broader "Miscellaneous [Theme]" group only if necessary.
+4.  **Quantity Control:** Target between 3 and 10 groups. Do not exceed 10 groups.
+
+CATEGORY: {category_name}
+
+KEYWORDS TO GROUP:
+---
+{keywords}
+---
+
+Your response MUST be a JSON object containing a list of Group objects under the key "groups".
+
+JSON SCHEMA EXAMPLE:
+{{
+    "groups": [
+        {{
+            "group_name": "Specific Rolex Models",
+            "keywords": ["rolex daytona", "rolex submariner", "rolex gmt master", "rolex datejust"]
+        }},
+        {{
+            "group_name": "Luxury Diamond Watches",
+            "keywords": ["diamond watches", "fully iced out watches", "high end watch"]
+        }}
+    ]
+}}

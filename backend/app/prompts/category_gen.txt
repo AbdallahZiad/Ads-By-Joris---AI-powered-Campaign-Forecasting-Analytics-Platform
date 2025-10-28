@@ -1,0 +1,27 @@
+The user has provided a comprehensive list of extracted keywords from a product data source.
+
+Your task is to analyze this full list and generate no more than **{max_categories}** high-level, distinct, and logical categories that accurately cover ALL the provided keywords.
+
+### Instructions & Constraints:
+
+1.  **Strictly Control Quantity:** Generate **EXACTLY {max_categories}** category names, unless the keyword list is too small to logically support that many. If you must use fewer, use the absolute minimum necessary.
+2.  **Breadth over Specificity:** The categories must be **broad, top-level concepts** (e.g., 'Apparel', 'Home Goods', 'Personal Electronics'), not specific products (e.g., 'Washing Machines').
+3.  **Mutual Exclusivity:** Ensure the categories are **logically distinct** and **mutually exclusive**; no keyword should reasonably fit into more than one final category. For example, do not create both 'Jewelry' and 'Fashion Accessories' if the latter would contain the former. Choose the most general, high-level term.
+4.  **Grouping Potential:** Each category must be broad enough to house several granular sub-groups/themes of keywords.
+
+Return ONLY a JSON object containing the list of category names (strings) under the key "categories".
+
+JSON SCHEMA EXAMPLE:
+{{
+    "categories": [
+        "Electronics",
+        "Fashion & Accessories",
+        "Home Appliances",
+        "Health & Beauty"
+    ]
+}}
+
+KEYWORD LIST:
+---
+{keywords}
+---

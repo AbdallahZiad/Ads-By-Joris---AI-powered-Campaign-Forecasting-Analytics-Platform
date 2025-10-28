@@ -25,7 +25,10 @@ dependencies = [
     "prophet",
     "numpy",
     "pandas",
-    "plotly"
+    "plotly",
+    "openai",
+    "langchain_text_splitters",
+    "tenacity"
 ]
 
 [tool.uv]
