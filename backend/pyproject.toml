@@ -28,7 +28,10 @@ dependencies = [
     "plotly",
     "openai",
     "langchain_text_splitters",
-    "tenacity"
+    "tenacity",
+    "aiohttp",
+    "beautifulsoup4",
+    "lxml"
 ]
 
 [tool.uv]
