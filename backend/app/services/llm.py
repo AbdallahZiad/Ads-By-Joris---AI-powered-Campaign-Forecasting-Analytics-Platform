@@ -2,6 +2,7 @@ import json
 import os
 import asyncio
 import math
+import time
 from typing import List, Dict, Type, Any
 
 from pydantic import BaseModel, ValidationError
@@ -15,7 +16,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import settings
 from app.services.llm_schemas import (
     ExtractedKeywordResults, CategoryNames, KeywordCategoryMapping,
-    FinalKeywordHierarchy, KeywordGroups, PipelineResult, PipelineTokenMetrics
+    FinalKeywordHierarchy, KeywordGroups, PipelineResult, PipelineTokenMetrics,
+    PhaseMetrics
 )
 
 
@@ -42,18 +44,27 @@ class LLMService:
     _MAX_PROMPT_TOKENS = _MAX_INPUT_TOKENS - _MAX_RESPONSE_TOKENS
     _RETRY_ATTEMPTS = 3
     _PROMPT_DIR = "app/prompts"
+    _MAX_CONCURRENT_API_CALLS = 3
 
     def __init__(self):
         # 1. Authentication and Client Initialization
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        # 2. Token Tracking (New)
+        # 2. Token and Metrics Tracking
         self._total_tokens_used: int = 0
+        # Phase-specific counters for the current run
+        self._current_phase_tokens: int = 0
+        self._current_phase_api_calls: int = 0
+        # Final metrics storage
+        self._phase_metrics: Dict[str, PhaseMetrics] = {}
 
     # --- Internal Helpers ---
 
     def get_token_metrics(self) -> PipelineTokenMetrics:
-        """Provides the current accumulated token usage for the instance."""
-        return PipelineTokenMetrics(total_tokens=self._total_tokens_used)
+        """Provides the current accumulated token usage and phase metrics for the instance."""
+        return PipelineTokenMetrics(
+            total_tokens=self._total_tokens_used,
+            phase_metrics=self._phase_metrics
+        )
 
     def _load_prompt_template(self, filename: str) -> str:
         """Loads a prompt template from the dedicated file system."""
@@ -65,30 +76,66 @@ class LLMService:
             # Raise a specific service error to be caught higher up
             raise LLMServiceError(f"Prompt template file not found: {path}") from e
 
+    async def _track_phase_stats(self, phase_name: str, phase_coro: Any) -> Any:
+        """Wraps an async pipeline phase, tracking time, tokens, and API calls."""
+        self._current_phase_tokens = 0
+        self._current_phase_api_calls = 0
+        start_time = time.time()
+
+        result = await phase_coro
+
+        end_time = time.time()
+        time_taken = end_time - start_time
+
+        self._phase_metrics[phase_name] = PhaseMetrics(
+            time_taken_seconds=time_taken,
+            tokens_used=self._current_phase_tokens,
+            api_calls=self._current_phase_api_calls
+        )
+
+        return result
+
     @retry(
         stop=stop_after_attempt(_RETRY_ATTEMPTS),
         wait=wait_exponential(min=2, max=10),
         # Retry on OpenAI API errors, Pydantic validation failures, and network timeouts
         retry=retry_if_exception_type((OpenAIError, ValidationError, json.JSONDecodeError, asyncio.TimeoutError))
     )
-
     async def _call_api_with_retry(
+            self,
+            prompt_filename: str,
+            input_data: Dict[str, Any],
+            response_model: Type[BaseModel],
+            semaphore: asyncio.Semaphore = None
+    ) -> Any:
+        """
+        Executes an OpenAI chat completion using JSON mode, validates the
+        raw JSON response, and increments the total token counter.
+        The optional `semaphore` is used to limit concurrent API calls.
+        """
+
+        # Use the semaphore if provided to limit concurrent requests
+        if semaphore:
+            async with semaphore:
+                return await self._execute_api_call(prompt_filename, input_data, response_model)
+        else:
+            return await self._execute_api_call(prompt_filename, input_data, response_model)
+
+    async def _execute_api_call(
             self,
             prompt_filename: str,
             input_data: Dict[str, Any],
             response_model: Type[BaseModel]
     ) -> Any:
         """
-        Executes an OpenAI chat completion using JSON mode, validates the
-        raw JSON response, and **increments the total token counter**.
+        Internal function to handle the actual API communication,
+        separated to allow the semaphore to wrap the whole call.
         """
-
         # 1. Load and Format Prompt
         template = self._load_prompt_template(prompt_filename)
         user_content = template.format(**input_data)
 
         # 2. Build Messages
-        # NOTE: The system prompt is crucial for instructing the LLM to use JSON.
         messages: List[ChatCompletionMessageParam] = [
             ChatCompletionSystemMessageParam(
                 role="system",
@@ -102,6 +149,7 @@ class LLMService:
 
         # 3. API Call
         try:
+            self._current_phase_api_calls += 1
             response = await self.client.chat.completions.create(
                 model=self._MODEL_NAME,
                 messages=messages,
@@ -113,7 +161,9 @@ class LLMService:
 
             # --- Token Tracking Addition ---
             if response.usage and response.usage.total_tokens:
-                self._total_tokens_used += response.usage.total_tokens
+                tokens = response.usage.total_tokens
+                self._total_tokens_used += tokens
+                self._current_phase_tokens += tokens
 
             # 4. Extract and Validate
             json_string = response.choices[0].message.content
@@ -150,7 +200,7 @@ class LLMService:
 
     async def extract_keywords_from_text(self, text: str, max_keywords: int = 500) -> List[str]:
         """
-        Splits text, runs parallel API calls to extract keywords from chunks,
+        Splits text, runs throttled parallel API calls to extract keywords from chunks,
         and aggregates/cleans the results, respecting a max limit.
         """
 
@@ -160,16 +210,20 @@ class LLMService:
 
         print(f"Starting keyword extraction with {len(chunks)} chunks.")
 
+        # Initialize semaphore to limit concurrent API calls (e.g., to 3)
+        semaphore = asyncio.Semaphore(self._MAX_CONCURRENT_API_CALLS)
+
         tasks = [
             self._call_api_with_retry(
                 prompt_filename="keyword_extract.txt",
                 input_data={"text_chunk": chunk},
-                response_model=ExtractedKeywordResults
+                response_model=ExtractedKeywordResults,
+                semaphore=semaphore
             )
             for chunk in chunks
         ]
 
-        # Use asyncio.gather for parallel processing
+        # Use asyncio.gather for parallel processing, constrained by the semaphore
         results: List[ExtractedKeywordResults] = await asyncio.gather(*tasks, return_exceptions=True)
 
         master_keywords: List[str] = []
@@ -192,6 +246,7 @@ class LLMService:
     async def generate_categories(self, keywords: List[str], number_of_categories: int = None) -> List[str]:
         """
         Takes a list of keywords and prompts the LLM to generate high-level category names.
+        This call is not parallelized, so no semaphore is needed.
         """
         print(f"Generating categories for {len(keywords)} keywords...")
 
@@ -200,6 +255,7 @@ class LLMService:
             # Simple heuristic: 5 categories minimum, max 30, roughly 1 per 50 keywords
             number_of_categories = max(5, min(30, math.ceil(len(keywords) / 50)))
 
+        # No semaphore passed as this is a single, sequential API call
         result: CategoryNames = await self._call_api_with_retry(
             prompt_filename="category_gen.txt",
             input_data={
@@ -218,10 +274,12 @@ class LLMService:
         """
         PRIVATE: Performs the first pass: maps all keywords to the given categories.
         Returns a clean dictionary (unwrapped from RootModel).
+        This call is not parallelized, so no semaphore is needed.
         """
         print("Starting Pass 1: Categorizing keywords into pre-defined categories...")
 
         # The output is a RootModel[Dict[str, List[str]]]
+        # No semaphore passed as this is a single, sequential API call
         result: KeywordCategoryMapping = await self._call_api_with_retry(
             prompt_filename="keyword_categorize.txt",
             input_data={
@@ -236,7 +294,7 @@ class LLMService:
 
     async def group_keywords_by_category(self, category_mapping: Dict[str, List[str]]) -> List[FinalKeywordHierarchy]:
         """
-        Performs the final, concurrent grouping pass: breaks keywords within
+        Performs the final, throttled concurrent grouping pass: breaks keywords within
         each category into smaller, tightly-themed groups.
         """
 
@@ -244,6 +302,9 @@ class LLMService:
             return []
 
         print(f"Starting final Pass 2: Concurrent grouping for {len(category_mapping)} categories.")
+
+        # Initialize semaphore to limit concurrent API calls (e.g., to 3)
+        semaphore = asyncio.Semaphore(self._MAX_CONCURRENT_API_CALLS)
 
         tasks = []
         for category, keywords in category_mapping.items():
@@ -255,11 +316,12 @@ class LLMService:
                         "category_name": category,
                         "keywords": "\n".join(keywords)
                     },
-                    response_model=KeywordGroups
+                    response_model=KeywordGroups,
+                    semaphore=semaphore
                 )
                 tasks.append((category, task))
 
-        # Run all category grouping tasks concurrently
+        # Run all category grouping tasks concurrently, constrained by the semaphore
         results: List[KeywordGroups] = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
 
         final_hierarchy: List[FinalKeywordHierarchy] = []
@@ -289,29 +351,41 @@ class LLMService:
         Runs the full, multistep keyword hierarchy generation process and
         returns the structured data along with the total token cost.
         """
-        # Clear token counter for a new run
+        # Clear token and metrics counters for a new run
         self._total_tokens_used = 0
+        self._phase_metrics = {}
 
         # 1. Keyword Extraction (Chunking + Parallel API Calls)
-        master_keywords = await self.extract_keywords_from_text(text, max_keywords)
+        master_keywords = await self._track_phase_stats(
+            "keyword_extraction",
+            self.extract_keywords_from_text(text, max_keywords)
+        )
         if not master_keywords:
             print("Pipeline stopped: No keywords extracted.")
-            # Return empty data with current metrics
             return PipelineResult(data=[], metrics=self.get_token_metrics())
 
         # 2. Category Generation
-        categories = await self.generate_categories(master_keywords)
+        categories = await self._track_phase_stats(
+            "category_generation",
+            self.generate_categories(master_keywords)
+        )
         if not categories:
             print("Pipeline stopped: Failed to generate categories.")
             return PipelineResult(data=[], metrics=self.get_token_metrics())
 
         # 3. Categorization Pass 1 (Keywords -> Categories)
-        category_mapping_dict = await self._categorize_keywords_pass_1(master_keywords, categories)
+        category_mapping_dict = await self._track_phase_stats(
+            "keyword_categorization",
+            self._categorize_keywords_pass_1(master_keywords, categories)
+        )
 
         # 4. Grouping Pass 2 (Categories -> Groups -> Keywords) - Concurrently
-        final_hierarchy = await self.group_keywords_by_category(category_mapping_dict)
+        final_hierarchy = await self._track_phase_stats(
+            "keyword_grouping",
+            self.group_keywords_by_category(category_mapping_dict)
+        )
 
-        # 5. Final Result Packaging (New)
+        # 5. Final Result Packaging
         return PipelineResult(
             data=final_hierarchy,
             metrics=self.get_token_metrics()

@@ -31,7 +31,8 @@ dependencies = [
     "tenacity",
     "aiohttp",
     "beautifulsoup4",
-    "lxml"
+    "lxml",
+    "tiktoken"
 ]
 
 [tool.uv]

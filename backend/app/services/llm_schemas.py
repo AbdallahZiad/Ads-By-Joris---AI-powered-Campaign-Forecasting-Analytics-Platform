@@ -22,7 +22,6 @@ class KeywordCategoryMapping(RootModel[Dict[str, List[str]]]):
     a dictionary where keys are the pre-defined category names and values
     are the list of keywords assigned to that category.
     """
-    # The RootModel handles the validation; the structure is accessed via .root
     pass
 
 
@@ -49,11 +48,22 @@ class FinalKeywordHierarchy(BaseModel):
     groups: List[KeywordGroup]
 
 
-# --- Final Pipeline Result ---
+# --- Final Pipeline Result Metrics ---
+
+class PhaseMetrics(BaseModel):
+    """Metrics for a single phase of the pipeline."""
+    time_taken_seconds: float = Field(..., description="The time taken for this phase, in seconds.")
+    tokens_used: int = Field(..., description="Total tokens (prompt + completion) used in this phase.")
+    api_calls: int = Field(..., description="The number of API calls made in this phase.")
+
 
 class PipelineTokenMetrics(BaseModel):
-    """Encapsulates the total token usage for the entire pipeline run."""
+    """Encapsulates the total token usage and phase-specific metrics for the entire pipeline run."""
     total_tokens: int = Field(0, description="The sum of all prompt and completion tokens used across all API calls.")
+    phase_metrics: Dict[str, PhaseMetrics] = Field(
+        default_factory=dict,
+        description="A dictionary containing metrics for each processing phase."
+    )
 
 
 class PipelineResult(BaseModel):
