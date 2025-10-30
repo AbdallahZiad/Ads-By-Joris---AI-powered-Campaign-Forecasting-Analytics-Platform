@@ -3,7 +3,7 @@ import warnings
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from app.services.google_ads_schemas import Month
+from app.schemas.google_ads_schemas import Month
 
 # Suppress all future warnings, which includes the FutureWarning from sklearn
 warnings.filterwarnings("ignore", category=FutureWarning)

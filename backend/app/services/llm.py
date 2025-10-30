@@ -14,7 +14,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.core.config import settings
-from app.services.llm_schemas import (
+from app.schemas.llm_schemas import (
     ExtractedKeywordResults, CategoryNames, KeywordCategoryMapping,
     FinalKeywordHierarchy, KeywordGroups, PipelineResult, PipelineTokenMetrics,
     PhaseMetrics

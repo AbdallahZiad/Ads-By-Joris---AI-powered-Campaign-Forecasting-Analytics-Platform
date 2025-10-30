@@ -11,9 +11,9 @@ from datetime import datetime
 from prophet import Prophet
 
 from app.services.google_ads import GoogleAdsService
-from app.services.google_ads_schemas import GoogleAdsKeywordResponse, UnifiedKeywordResult, KeywordHistoricalMetrics, \
+from app.schemas.google_ads_schemas import GoogleAdsKeywordResponse, UnifiedKeywordResult, KeywordHistoricalMetrics, \
     Month, GoogleAdsTargeting
-from app.services.analysis_schemas import ForecastResponse, KeywordForecast, ForecastPoint
+from app.schemas.analysis_schemas import ForecastResponse, KeywordForecast, ForecastPoint
 
 # Suppress all future warnings, including from third-party libraries
 warnings.filterwarnings("ignore", category=FutureWarning)

@@ -10,7 +10,7 @@ from dateutil.relativedelta import relativedelta
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 from google.api_core.exceptions import ResourceExhausted
-from app.services.google_ads_schemas import GoogleAdsCredentials, GoogleAdsTargeting, GoogleAdsKeywordResponse
+from app.schemas.google_ads_schemas import GoogleAdsCredentials, GoogleAdsTargeting, GoogleAdsKeywordResponse
 
 
 class GoogleAdsService:
@@ -209,7 +209,7 @@ class GoogleAdsService:
         """
         return [self._proto_to_dict(item) for item in pager_instance]
 
-    def _filter_keywords_without_metrics(self, response):
+    def _filter_keywords_without_metrics(self, response, first_n_keywords: int = None):
         if "results" in response and isinstance(response["results"], list):
             # Filter the list: keep only results where 'keyword_idea_metrics' is present
             filtered_results = [
@@ -218,7 +218,7 @@ class GoogleAdsService:
             ]
 
             # Replace the original results with the filtered list
-            response["results"] = filtered_results
+            response["results"] = filtered_results if first_n_keywords is None else filtered_results[:first_n_keywords]
 
     # --------------------------------------------------------------------------
     # --- Public API Methods ---
@@ -270,7 +270,8 @@ class GoogleAdsService:
             self,
             seed_keywords: List[str],
             target: Optional[GoogleAdsTargeting] = None,
-            years_of_history: int = 5
+            years_of_history: int = 5,
+            maximum_number_of_new_keywords: int = None
     ) -> GoogleAdsKeywordResponse:
         """
         Generates new keyword ideas and retrieves enriched metrics for seed keywords asynchronously.
@@ -282,6 +283,7 @@ class GoogleAdsService:
             seed_keywords: A list of keyword phrases to use as seeds for idea generation.
             target: Optional Pydantic target object to override the default geo & language constraints.
             years_of_history: The number of full years of historical data to fetch.
+            maximum_number_of_new_keywords: The maximum number of new keyword ideas to generate.
         Returns:
             A validated KeywordIdeaResponse Pydantic object containing new keyword ideas
             and their detailed metrics.
@@ -314,7 +316,13 @@ class GoogleAdsService:
         # Package the list into the expected top-level dictionary structure {"results": [...]},
         # which matches the KeywordIdeaResponse Pydantic model.
         response_data = {"results": results_list}
-        self._filter_keywords_without_metrics(response_data)
+        if maximum_number_of_new_keywords is not None:
+            self._filter_keywords_without_metrics(
+                response_data,
+                first_n_keywords=len(seed_keywords) + maximum_number_of_new_keywords
+            )
+        else:
+            self._filter_keywords_without_metrics(response_data)
 
         # Validate and return
         response: GoogleAdsKeywordResponse = GoogleAdsKeywordResponse.model_validate(response_data)

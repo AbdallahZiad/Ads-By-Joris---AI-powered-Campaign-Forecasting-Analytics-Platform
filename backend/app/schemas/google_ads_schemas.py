@@ -169,3 +169,41 @@ class GoogleAdsKeywordResponse(BaseModel):
         ...,
         description="A list of keyword results with metrics."
     )
+
+# --- Input Schemas For API Routes ---
+
+class GoogleAdsBaseKeywordsInput(BaseModel):
+    """Base model for requests that require a list of keywords and history depth."""
+    keywords: List[str] = Field(
+        ...,
+        min_length=1,
+        description="A list of keyword phrases to process."
+    )
+    years_of_history: int = Field(
+        5,
+        ge=1,
+        le=10,
+        description="The number of full years of historical data to fetch (1-10)."
+    )
+    # Allows API consumers to dynamically override the service's default targeting
+    targeting: Optional[GoogleAdsTargeting] = Field(
+        None,
+        description="Optional override for geo, language, and customer ID constraints."
+    )
+
+
+class GetKeywordsMetricsInput(GoogleAdsBaseKeywordsInput):
+    """
+    Input schema for the /metrics endpoint.
+    """
+    pass
+
+
+class EnrichKeywordsInput(GoogleAdsBaseKeywordsInput):
+    """
+    Input schema for the /enrich endpoint.
+    """
+    maximum_number_of_new_keywords: Optional[int] = Field(
+        None,
+        ge=1
+    )
