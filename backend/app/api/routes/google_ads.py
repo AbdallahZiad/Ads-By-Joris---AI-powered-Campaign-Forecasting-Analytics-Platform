@@ -11,7 +11,6 @@ router = APIRouter(prefix='/google-ads', tags=["Google Ads"])
     "/keywords/historical-metrics",
     response_model=GoogleAdsKeywordResponse,
     summary="Get Historical Metrics for Exact Keywords",
-    tags=["keywords"]
 )
 async def get_historical_metrics(
         input_data: GetKeywordsMetricsInput
@@ -34,7 +33,6 @@ async def get_historical_metrics(
     "/keywords/enrich",
     response_model=GoogleAdsKeywordResponse,
     summary="Generate New Keyword Ideas and Metrics",
-    tags=["keywords"]
 )
 async def enrich_keywords_with_ideas(
         input_data: EnrichKeywordsInput,

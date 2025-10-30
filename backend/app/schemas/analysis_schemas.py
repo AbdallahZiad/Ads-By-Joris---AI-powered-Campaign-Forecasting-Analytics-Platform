@@ -1,9 +1,9 @@
 import warnings
 
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from pydantic import BaseModel, Field, model_validator
+from typing import List, Optional, ClassVar
 
-from app.schemas.google_ads_schemas import Month
+from app.schemas.google_ads_schemas import Month, GoogleAdsKeywordResponse
 
 # Suppress all future warnings, which includes the FutureWarning from sklearn
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -41,3 +41,49 @@ class KeywordForecast(BaseModel):
 class ForecastResponse(BaseModel):
     """The root model containing all forecasted keyword results."""
     forecasts: List[KeywordForecast] = Field(..., description="A list of forecasts, one for each keyword analyzed.")
+
+
+class ForecastInput(BaseModel):
+    """
+    Input schema for the /forecast route. Requires the full Google Ads Keyword
+    Response (results and metrics) and the duration of the forecast.
+    """
+    MIN_DATA_POINTS: ClassVar[int] = 24
+
+    google_ads_data: GoogleAdsKeywordResponse = Field(
+        ...,
+        description=(
+            "The complete response object from the Google Ads keyword metrics endpoint. "
+            "**Constraint:** The historical data for every keyword in the 'results' list "
+            f"must comprise a minimum of {MIN_DATA_POINTS + 1} monthly search volume records "
+            f"(i.e., more than {MIN_DATA_POINTS} data points) to ensure forecast accuracy."
+        )
+    )
+    forecast_months: int = Field(
+        12,
+        ge=1,
+        le=36,
+        description="The number of future months to generate the forecast for (1-36)."
+    )
+
+    @model_validator(mode='after')
+    def validate_historical_data_length_for_all_keywords(self) -> 'ForecastInput':
+        """
+        Ensures that ALL keywords in google_ads_data have more than 24
+        monthly search volumes for the forecast to be reliable.
+        """
+
+        if not self.google_ads_data.results:
+            raise ValueError("google_ads_data must contain at least one keyword result.")
+
+        # Iterate over every keyword result to check its data length
+        for result in self.google_ads_data.results:
+            data_points = len(result.keyword_metrics.monthly_search_volumes)
+
+            if data_points <= self.MIN_DATA_POINTS:
+                raise ValueError(
+                    f"Keyword '{result.keyword}' has insufficient historical data. "
+                    f"Requires more than {self.MIN_DATA_POINTS} monthly search volumes, but only {data_points} were found."
+                )
+
+        return self
