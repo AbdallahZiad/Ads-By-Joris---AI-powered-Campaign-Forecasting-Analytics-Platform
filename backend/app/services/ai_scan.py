@@ -4,7 +4,7 @@ import time
 from typing import List, Tuple
 
 from app.services.web_crawler import CrawlConfig, CrawlStats, WebCrawlerService
-from app.services.llm import LLMService, PipelineResult, PipelineTokenMetrics, PhaseMetrics
+from app.services.llm import LLMService, LLMResult, LLMTokenMetrics, PhaseMetrics
 
 
 class AIScanService:
@@ -32,7 +32,7 @@ class AIScanService:
 
     async def _run_llm_pipeline_step(
             self, raw_text_snippets: List[str]
-    ) -> PipelineResult:
+    ) -> LLMResult:
         """Runs the LLM keyword processing pipeline on the crawled text."""
         print("--- 2. LLM KEYWORD PIPELINE (Processing) ---")
 
@@ -44,7 +44,7 @@ class AIScanService:
         if not full_text_content.strip():
             print("LLM pipeline skipped: No text content was successfully extracted.")
             # Return a valid PipelineResult with zero tokens
-            return PipelineResult(data=[], metrics=PipelineTokenMetrics(total_tokens=0, phase_metrics={}))
+            return LLMResult(data=[], metrics=LLMTokenMetrics(total_tokens=0, phase_metrics={}))
 
         # Run the full, robust LLM pipeline
         pipeline_result = await llm_service.run_full_extraction_categorization_pipeline(
@@ -53,7 +53,7 @@ class AIScanService:
 
         return pipeline_result
 
-    def _display_llm_metrics(self, metrics: PipelineTokenMetrics):
+    def _display_llm_metrics(self, metrics: LLMTokenMetrics):
         """Prints a clean, cohesive summary of the LLM pipeline metrics."""
         print("\n--- LLM Processing Metrics (Per Phase) ---")
 
@@ -66,7 +66,7 @@ class AIScanService:
 
         for phase_name, p_metrics in sorted_phases:
             # Clean up the phase name for display
-            display_name = phase_name.replace('_', ' ').title()
+            display_name = phase_name.value.replace('_', ' ').title()
             time_str = f"{p_metrics.time_taken_seconds:.2f}s"
             tokens_str = f"{p_metrics.tokens_used:,} tokens"
             calls_str = f"{p_metrics.api_calls} calls"
@@ -78,7 +78,7 @@ class AIScanService:
 
     async def scan_website(
             self, config: CrawlConfig
-    ) -> Tuple[PipelineResult, CrawlStats]:
+    ) -> Tuple[LLMResult, CrawlStats]:
         """
         Executes the complete website scan and AI processing pipeline.
 

@@ -16,8 +16,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import settings
 from app.schemas.llm_schemas import (
     ExtractedKeywordResults, CategoryNames, KeywordCategoryMapping,
-    FinalKeywordHierarchy, KeywordGroups, PipelineResult, PipelineTokenMetrics,
-    PhaseMetrics
+    FinalKeywordHierarchy, KeywordGroups, LLMResult, LLMTokenMetrics,
+    PhaseMetrics, Phase
 )
 
 
@@ -55,13 +55,13 @@ class LLMService:
         self._current_phase_tokens: int = 0
         self._current_phase_api_calls: int = 0
         # Final metrics storage
-        self._phase_metrics: Dict[str, PhaseMetrics] = {}
+        self._phase_metrics: Dict[Phase, PhaseMetrics] = {}
 
     # --- Internal Helpers ---
 
-    def get_token_metrics(self) -> PipelineTokenMetrics:
+    def get_token_metrics(self) -> LLMTokenMetrics:
         """Provides the current accumulated token usage and phase metrics for the instance."""
-        return PipelineTokenMetrics(
+        return LLMTokenMetrics(
             total_tokens=self._total_tokens_used,
             phase_metrics=self._phase_metrics
         )
@@ -76,7 +76,7 @@ class LLMService:
             # Raise a specific service error to be caught higher up
             raise LLMServiceError(f"Prompt template file not found: {path}") from e
 
-    async def _track_phase_stats(self, phase_name: str, phase_coro: Any) -> Any:
+    async def _track_phase_stats(self, phase: Phase, phase_coro: Any) -> Any:
         """Wraps an async pipeline phase, tracking time, tokens, and API calls."""
         self._current_phase_tokens = 0
         self._current_phase_api_calls = 0
@@ -87,7 +87,7 @@ class LLMService:
         end_time = time.time()
         time_taken = end_time - start_time
 
-        self._phase_metrics[phase_name] = PhaseMetrics(
+        self._phase_metrics[phase] = PhaseMetrics(
             time_taken_seconds=time_taken,
             tokens_used=self._current_phase_tokens,
             api_calls=self._current_phase_api_calls
@@ -97,7 +97,7 @@ class LLMService:
 
     @retry(
         stop=stop_after_attempt(_RETRY_ATTEMPTS),
-        wait=wait_exponential(min=2, max=10),
+        wait=wait_exponential(min=2, max=5),
         # Retry on OpenAI API errors, Pydantic validation failures, and network timeouts
         retry=retry_if_exception_type((OpenAIError, ValidationError, json.JSONDecodeError, asyncio.TimeoutError))
     )
@@ -346,7 +346,7 @@ class LLMService:
 
     # --- Orchestration Method (For the Pipeline Service to call) ---
 
-    async def run_full_extraction_categorization_pipeline(self, text: str, max_keywords: int = 500) -> PipelineResult:
+    async def run_full_extraction_categorization_pipeline(self, text: str, max_keywords: int = 500) -> LLMResult:
         """
         Runs the full, multistep keyword hierarchy generation process and
         returns the structured data along with the total token cost.
@@ -357,36 +357,36 @@ class LLMService:
 
         # 1. Keyword Extraction (Chunking + Parallel API Calls)
         master_keywords = await self._track_phase_stats(
-            "keyword_extraction",
+            Phase.KEYWORD_EXTRACTION,
             self.extract_keywords_from_text(text, max_keywords)
         )
         if not master_keywords:
             print("Pipeline stopped: No keywords extracted.")
-            return PipelineResult(data=[], metrics=self.get_token_metrics())
+            return LLMResult(data=[], metrics=self.get_token_metrics())
 
         # 2. Category Generation
         categories = await self._track_phase_stats(
-            "category_generation",
+            Phase.CATEGORY_GENERATION,
             self.generate_categories(master_keywords)
         )
         if not categories:
             print("Pipeline stopped: Failed to generate categories.")
-            return PipelineResult(data=[], metrics=self.get_token_metrics())
+            return LLMResult(data=[], metrics=self.get_token_metrics())
 
         # 3. Categorization Pass 1 (Keywords -> Categories)
         category_mapping_dict = await self._track_phase_stats(
-            "keyword_categorization",
+            Phase.KEYWORD_CATEGORIZATION,
             self._categorize_keywords_pass_1(master_keywords, categories)
         )
 
         # 4. Grouping Pass 2 (Categories -> Groups -> Keywords) - Concurrently
         final_hierarchy = await self._track_phase_stats(
-            "keyword_grouping",
+            Phase.KEYWORD_GROUPING,
             self.group_keywords_by_category(category_mapping_dict)
         )
 
         # 5. Final Result Packaging
-        return PipelineResult(
+        return LLMResult(
             data=final_hierarchy,
             metrics=self.get_token_metrics()
         )

@@ -1,3 +1,5 @@
+from enum import Enum
+
 from pydantic import BaseModel, Field, RootModel
 from typing import List, Dict
 
@@ -49,6 +51,11 @@ class FinalKeywordHierarchy(BaseModel):
 
 
 # --- Final Pipeline Result Metrics ---
+class Phase(Enum):
+    KEYWORD_EXTRACTION = "keyword_extraction"
+    CATEGORY_GENERATION = "category_generation"
+    KEYWORD_CATEGORIZATION = "keyword_categorization"
+    KEYWORD_GROUPING = "keyword_grouping"
 
 class PhaseMetrics(BaseModel):
     """Metrics for a single phase of the pipeline."""
@@ -57,16 +64,16 @@ class PhaseMetrics(BaseModel):
     api_calls: int = Field(..., description="The number of API calls made in this phase.")
 
 
-class PipelineTokenMetrics(BaseModel):
+class LLMTokenMetrics(BaseModel):
     """Encapsulates the total token usage and phase-specific metrics for the entire pipeline run."""
     total_tokens: int = Field(0, description="The sum of all prompt and completion tokens used across all API calls.")
-    phase_metrics: Dict[str, PhaseMetrics] = Field(
+    phase_metrics: Dict[Phase, PhaseMetrics] = Field(
         default_factory=dict,
-        description="A dictionary containing metrics for each processing phase."
+        description="A dictionary containing metrics for each processing phase.",
     )
 
 
-class PipelineResult(BaseModel):
+class LLMResult(BaseModel):
     """The final model returned to the service layer, containing both data and token metrics."""
     data: List[FinalKeywordHierarchy] = Field(..., description="The final structured keyword hierarchy data.")
-    metrics: PipelineTokenMetrics = Field(..., description="The token usage data for the pipeline execution.")
+    metrics: LLMTokenMetrics = Field(..., description="The token usage data for the pipeline execution.")
