@@ -1,0 +1,45 @@
+.collapsibleContainer {
+    @apply border border-gray-200 rounded-md mb-4;
+    overflow: hidden;
+}
+
+.collapsibleHeader {
+    @apply flex justify-between items-center w-full p-4 bg-white cursor-pointer;
+    border: none;
+    text-align: left;
+}
+
+.collapsibleTitle {
+    @apply text-lg font-semibold text-gray-800;
+    margin: 0;
+}
+
+.collapsibleIcon {
+    @apply transform transition-transform duration-300 ease-in-out;
+    color: #6b7280;
+}
+
+.collapsibleIcon.open {
+    @apply rotate-180;
+}
+
+.collapsibleContent {
+    @apply overflow-hidden;
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease-in-out;
+}
+
+.collapsibleContent.open {
+    grid-template-rows: 1fr;
+}
+
+.collapsibleInnerContent {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.contentWrapper {
+    @apply p-4;
+    border-top: 1px solid #e5e7eb;
+}
