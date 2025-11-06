@@ -1,0 +1,61 @@
+.container {
+    @apply border border-gray-200 rounded-md bg-white overflow-hidden;
+}
+
+.content {
+    @apply relative;
+}
+
+.actions {
+    @apply absolute top-4 right-4 flex space-x-2 z-10;
+}
+
+.actionButton {
+    @apply p-1 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.textBlock {
+    @apply w-full h-40 p-4 text-base leading-relaxed text-gray-800 font-mono m-0;
+
+    /* NEW: Enable scrolling for both states */
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.textBlock::-webkit-scrollbar {
+    display: none;
+}
+
+.keywordList {
+    @apply whitespace-pre-wrap;
+    cursor: pointer; /* Indicates it's interactive (for double-click) */
+}
+
+.textarea {
+    @apply resize-none border-none outline-none;
+    background-color: transparent;
+
+    @apply focus:ring-2 focus:ring-inset;
+    focus-ring-color: #25DFD6;
+}
+
+.placeholder {
+    @apply text-gray-400;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
