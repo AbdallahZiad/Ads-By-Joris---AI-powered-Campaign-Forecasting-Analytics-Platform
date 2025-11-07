@@ -1,0 +1,33 @@
+.container {
+    @apply flex items-center;
+    min-width: 0;
+}
+
+.labelText {
+    @apply truncate cursor-pointer;
+}
+
+.input {
+    @apply outline-none bg-transparent text-gray-800;
+    border-bottom: 2px solid #25DFD6;
+    field-sizing: content;
+    min-width: 60px;
+    max-width: 100%;
+}
+
+.actionButton {
+    @apply ml-2 p-1 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600;
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease-in-out;
+}
+
+.editButton {
+    opacity: 0;
+}
+
+.container:hover .editButton,
+:global(.header-hover-target):hover .editButton {
+    opacity: 1;
+}

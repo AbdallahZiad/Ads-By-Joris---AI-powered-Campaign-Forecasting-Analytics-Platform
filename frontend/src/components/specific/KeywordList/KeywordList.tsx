@@ -8,6 +8,8 @@ interface KeywordListProps {
     onCopy: (keywordsText: string) => void;
     onEdit?: () => void;
     initialEditMode?: boolean;
+    showBorder?: boolean;
+    // showPadding prop has been removed
 }
 
 const KeywordList: React.FC<KeywordListProps> = ({
@@ -16,6 +18,8 @@ const KeywordList: React.FC<KeywordListProps> = ({
                                                      onCopy,
                                                      onEdit,
                                                      initialEditMode = false,
+                                                     showBorder = true,
+                                                     // showPadding prop has been removed
                                                  }) => {
     const [isEditing, setIsEditing] = useState(initialEditMode);
     const [currentKeywordsText, setCurrentKeywordsText] = useState('');
@@ -65,14 +69,15 @@ const KeywordList: React.FC<KeywordListProps> = ({
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault(); // Prevent adding a new line
+            e.preventDefault();
             handleSaveClick();
         }
     };
 
     return (
-        <div className={styles.container}>
+        <div className={`${styles.container} ${showBorder ? styles.withBorder : ''}`}>
             <div className={styles.content}>
+                {/* Actions are z-10 */}
                 <div className={styles.actions}>
                     {!isEditing ? (
                         <button
@@ -95,6 +100,7 @@ const KeywordList: React.FC<KeywordListProps> = ({
                     </button>
                 </div>
 
+                {/* Ternary logic restored */}
                 {isEditing ? (
                     <textarea
                         ref={textareaRef}
@@ -108,8 +114,8 @@ const KeywordList: React.FC<KeywordListProps> = ({
                 ) : (
                     <pre
                         className={`${styles.textBlock} ${styles.keywordList}`}
-                        onDoubleClick={handleEditClick} // Double-click to edit
-                        title="Double-click to edit" // Tooltip for discoverability
+                        onDoubleClick={handleEditClick}
+                        title="Double-click to edit"
                     >
             {keywords.length > 0 ? (
                 keywordsString
