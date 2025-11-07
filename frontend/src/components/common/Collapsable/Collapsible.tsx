@@ -7,13 +7,13 @@ export interface CollapsibleProps {
     title: string;
     initialOpen?: boolean;
     onTitleSave?: (newName: string) => void;
+    onRemove?: () => void;
     headerActions?: ReactNode;
     children: ReactNode;
     containerClassName?: string;
     headerClassName?: string;
     contentClassName?: string;
     titleClassName?: string;
-    // ▼▼▼ NEW PROPS ▼▼▼
     selectable?: boolean;
     selected?: boolean;
     onSelect?: (isSelected: boolean) => void;
@@ -23,6 +23,7 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                                                      title,
                                                      initialOpen = false,
                                                      onTitleSave,
+                                                     onRemove, // ▼▼▼ NEW PROP ▼▼▼
                                                      headerActions,
                                                      children,
                                                      containerClassName = '',
@@ -45,7 +46,6 @@ const Collapsible: React.FC<CollapsibleProps> = ({
         onSelect?.(e.target.checked);
     };
 
-    // Stop propagation on the container to prevent header clicks from toggling it
     const handleCheckboxClick = (e: React.MouseEvent) => {
         e.stopPropagation();
     };
@@ -74,6 +74,7 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                         initialValue={title}
                         onSave={onTitleSave || (() => {})}
                         isEditable={!!onTitleSave}
+                        onRemove={onRemove} // ▼▼▼ Pass it down ▼▼▼
                         className={titleClassName}
                     />
                 </div>
@@ -86,7 +87,6 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                     </div>
                 )}
 
-                {/* ▼▼▼ NEW: Always visible checkbox ▼▼▼ */}
                 {selectable && (
                     <div className={styles.checkboxContainer} onClick={handleCheckboxClick}>
                         <input
@@ -98,7 +98,6 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                         />
                     </div>
                 )}
-                {/* ▲▲▲ NEW ▲▲▲ */}
             </div>
 
             <div className={`${styles.contentContainer} ${isOpen ? styles.open : ''}`}>

@@ -7,10 +7,9 @@ import styles from './Group.module.css';
 interface GroupProps {
     group: GroupType;
     initialOpen?: boolean;
-    // Selection props
     selected: boolean;
     onSelect: (isSelected: boolean) => void;
-    // Action props
+    onRemove: () => void;
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
@@ -24,6 +23,7 @@ const Group: React.FC<GroupProps> = ({
                                          initialOpen = false,
                                          selected,
                                          onSelect,
+                                         onRemove,
                                          onNameSave,
                                          onEnrich,
                                          onRunAnalysis,
@@ -36,9 +36,9 @@ const Group: React.FC<GroupProps> = ({
             title={group.name}
             initialOpen={initialOpen}
             onTitleSave={onNameSave}
+            onRemove={onRemove}
             containerClassName={styles.groupContainer}
             contentClassName={styles.groupContent}
-            // Enable selection for Groups
             selectable={true}
             selected={selected}
             onSelect={onSelect}

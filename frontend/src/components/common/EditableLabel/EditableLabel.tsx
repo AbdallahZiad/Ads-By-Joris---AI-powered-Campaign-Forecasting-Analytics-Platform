@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HiOutlinePencil, HiOutlineCheck } from 'react-icons/hi';
+import { HiOutlinePencil, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import styles from './EditableLabel.module.css';
 
 interface EditableLabelProps {
     initialValue: string;
     onSave: (newValue: string) => void;
     isEditable?: boolean;
-    className?: string; // For standard text styling (font size, weight, color)
-    inputClassName?: string; // For specific input styling overrides if needed
+    onRemove?: () => void;
+    className?: string;
+    inputClassName?: string;
 }
 
 const EditableLabel: React.FC<EditableLabelProps> = ({
                                                          initialValue,
                                                          onSave,
                                                          isEditable = true,
+                                                         onRemove,
                                                          className = '',
                                                          inputClassName = '',
                                                      }) => {
@@ -21,12 +23,10 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
     const [currentValue, setCurrentValue] = useState(initialValue);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Sync with external changes
     useEffect(() => {
         setCurrentValue(initialValue);
     }, [initialValue]);
 
-    // Auto-focus and select on edit
     useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus();
@@ -36,8 +36,14 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
 
     const handleStartEdit = (e?: React.MouseEvent) => {
         if (!isEditable) return;
-        e?.stopPropagation(); // Prevent triggering parent onClick (like collapsible toggle)
+        e?.stopPropagation();
         setIsEditing(true);
+    };
+
+    const handleRemove = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        // Optional: Add a confirmation dialog here if desired in the future
+        onRemove?.();
     };
 
     const handleSave = (e?: React.MouseEvent | React.FocusEvent) => {
@@ -46,7 +52,7 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
         if (trimmed && trimmed !== initialValue) {
             onSave(trimmed);
         } else {
-            setCurrentValue(initialValue); // Revert
+            setCurrentValue(initialValue);
         }
         setIsEditing(false);
     };
@@ -56,7 +62,7 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
             handleSave();
         } else if (e.key === 'Escape') {
             setIsEditing(false);
-            setCurrentValue(initialValue); // Revert
+            setCurrentValue(initialValue);
         }
     };
 
@@ -67,13 +73,13 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
                     ref={inputRef}
                     value={currentValue}
                     onChange={(e) => setCurrentValue(e.target.value)}
+                    onBlur={handleSave}
                     onKeyDown={handleKeyDown}
                     className={`${styles.input} ${className} ${inputClassName}`}
-                    // Simple dynamic width approximation
-                    // size={Math.max(currentValue.length /2, 1)}
                     onClick={(e) => e.stopPropagation()}
                 />
-                <button className={styles.actionButton} onClick={handleSave} aria-label="Save">
+                <button className={styles.actionButton} onMouseDown={handleSave} aria-label="Save">
+                    {/* Use onMouseDown for save to fire before onBlur */}
                     <HiOutlineCheck size={20} />
                 </button>
             </div>
@@ -84,16 +90,31 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
         <div className={styles.container}>
       <span
           className={`${styles.labelText} ${className}`}
+          onClick={handleStartEdit}
+          title={isEditable ? "Click to edit" : undefined}
       >
         {currentValue}
       </span>
+
+            {/* Edit Pencil */}
             {isEditable && (
                 <button
-                    className={`${styles.actionButton} ${styles.editButton}`}
+                    className={`${styles.hoverButton} ${styles.standard}`}
                     onClick={handleStartEdit}
                     aria-label="Edit"
                 >
                     <HiOutlinePencil size={18} />
+                </button>
+            )}
+
+            {onRemove && (
+                <button
+                    className={`${styles.hoverButton} ${styles.destructive}`}
+                    onClick={handleRemove}
+                    aria-label="Remove"
+                    title="Remove"
+                >
+                    <HiOutlineX size={18} />
                 </button>
             )}
         </div>

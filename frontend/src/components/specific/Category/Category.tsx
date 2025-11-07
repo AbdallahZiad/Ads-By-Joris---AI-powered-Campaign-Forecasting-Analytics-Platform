@@ -7,16 +7,16 @@ import styles from './Category.module.css';
 interface CategoryProps {
     category: CategoryType;
     initialOpen?: boolean;
-    // Category selection
     selected: boolean;
     onSelect: (isSelected: boolean) => void;
-    // Group selection (function that takes groupId and status)
     selectedGroupIds: Set<string>;
     onGroupSelect: (groupId: string, isSelected: boolean) => void;
-    // Other actions
+    onRemove: () => void;
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
+    // Group handlers
+    onGroupRemove: (groupId: string) => void; // ▼▼▼ Group Remove ▼▼▼
     onGroupNameSave: (groupId: string, newName: string) => void;
     onGroupEnrich: (groupId: string) => void;
     onGroupRunAnalysis: (groupId: string) => void;
@@ -32,9 +32,11 @@ const Category: React.FC<CategoryProps> = ({
                                                onSelect,
                                                selectedGroupIds,
                                                onGroupSelect,
+                                               onRemove, // ▼▼▼ NEW ▼▼▼
                                                onNameSave,
                                                onEnrich,
                                                onRunAnalysis,
+                                               onGroupRemove, // ▼▼▼ NEW ▼▼▼
                                                onGroupNameSave,
                                                onGroupEnrich,
                                                onGroupRunAnalysis,
@@ -47,9 +49,9 @@ const Category: React.FC<CategoryProps> = ({
             title={category.name}
             initialOpen={initialOpen}
             onTitleSave={onNameSave}
+            onRemove={onRemove}
             containerClassName={styles.categoryContainer}
             contentClassName={styles.categoryContent}
-            // Enable selection for Categories
             selectable={true}
             selected={selected}
             onSelect={onSelect}
@@ -69,10 +71,9 @@ const Category: React.FC<CategoryProps> = ({
                     key={group.id}
                     group={group}
                     initialOpen={false}
-                    // Pass down selection state
                     selected={selectedGroupIds.has(group.id)}
                     onSelect={(isSelected) => onGroupSelect(group.id, isSelected)}
-                    // Pass down other handlers
+                    onRemove={() => onGroupRemove(group.id)} // ▼▼▼ Pass down with ID ▼▼▼
                     onNameSave={(newName) => onGroupNameSave(group.id, newName)}
                     onEnrich={() => onGroupEnrich(group.id)}
                     onRunAnalysis={() => onGroupRunAnalysis(group.id)}

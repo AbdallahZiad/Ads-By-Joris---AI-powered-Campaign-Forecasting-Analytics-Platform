@@ -35,30 +35,23 @@ const MOCK_DATA: Category[] = [
 
 function App() {
     const [categories, setCategories] = useState<Category[]>(MOCK_DATA);
-
-    // Selection State
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
 
-    // === SELECTION HANDLERS ===
-
+    // === SELECTION HANDLERS (Unchanged) ===
     const handleCategorySelect = (categoryId: string, isSelected: boolean) => {
         const newSelectedCatIds = new Set(selectedCategoryIds);
         const newSelectedGroupIds = new Set(selectedGroupIds);
-
         const category = categories.find(c => c.id === categoryId);
         if (!category) return;
 
         if (isSelected) {
-            // Select category and ALL its groups
             newSelectedCatIds.add(categoryId);
             category.groups.forEach(g => newSelectedGroupIds.add(g.id));
         } else {
-            // Unselect category and ALL its groups
             newSelectedCatIds.delete(categoryId);
             category.groups.forEach(g => newSelectedGroupIds.delete(g.id));
         }
-
         setSelectedCategoryIds(newSelectedCatIds);
         setSelectedGroupIds(newSelectedGroupIds);
     };
@@ -66,26 +59,47 @@ function App() {
     const handleGroupSelect = (categoryId: string, groupId: string, isSelected: boolean) => {
         const newSelectedGroupIds = new Set(selectedGroupIds);
         const newSelectedCatIds = new Set(selectedCategoryIds);
-
         if (isSelected) {
             newSelectedGroupIds.add(groupId);
-            // Optional: Auto-select category if ALL its groups are now selected
             const category = categories.find(c => c.id === categoryId);
             if (category && category.groups.every(g => newSelectedGroupIds.has(g.id))) {
                 newSelectedCatIds.add(categoryId);
             }
         } else {
             newSelectedGroupIds.delete(groupId);
-            // Always unselect parent category if any group is deselected
             newSelectedCatIds.delete(categoryId);
         }
-
         setSelectedGroupIds(newSelectedGroupIds);
         setSelectedCategoryIds(newSelectedCatIds);
     };
 
-    // === DATA HANDLERS (Unchanged) ===
+    // === REMOVAL HANDLERS (NEW) ===
 
+    const handleCategoryRemove = (categoryId: string) => {
+        if (window.confirm("Are you sure you want to delete this category?")) {
+            setCategories(prev => prev.filter(c => c.id !== categoryId));
+            // Cleanup selection state
+            const newSelectedCatIds = new Set(selectedCategoryIds);
+            newSelectedCatIds.delete(categoryId);
+            setSelectedCategoryIds(newSelectedCatIds);
+        }
+    };
+
+    const handleGroupRemove = (categoryId: string, groupId: string) => {
+        if (window.confirm("Are you sure you want to delete this group?")) {
+            setCategories(prev => prev.map(cat =>
+                cat.id === categoryId
+                    ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) }
+                    : cat
+            ));
+            // Cleanup selection state
+            const newSelectedGroupIds = new Set(selectedGroupIds);
+            newSelectedGroupIds.delete(groupId);
+            setSelectedGroupIds(newSelectedGroupIds);
+        }
+    };
+
+    // === DATA HANDLERS (Unchanged) ===
     const handleCategoryNameSave = (categoryId: string, newName: string) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, name: newName } : cat));
     };
@@ -95,9 +109,6 @@ function App() {
     const handleKeywordSave = (categoryId: string, groupId: string, newKeywords: string[]) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, keywords: newKeywords } : grp) } : cat));
     };
-
-    // (Mock action handlers shortened for brevity, they remain the same as before)
-    const noOp = () => {};
 
     return (
         <div style={{ padding: '2rem', maxWidth: '800px', margin: 'auto' }}>
@@ -115,14 +126,16 @@ function App() {
                     key={category.id}
                     category={category}
                     initialOpen={category.id === 'c1'}
-
-                    // Selection
                     selected={selectedCategoryIds.has(category.id)}
                     onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
                     selectedGroupIds={selectedGroupIds}
                     onGroupSelect={(groupId, isSelected) => handleGroupSelect(category.id, groupId, isSelected)}
 
-                    // Actions
+                    // ▼▼▼ New Removal Handlers ▼▼▼
+                    onRemove={() => handleCategoryRemove(category.id)}
+                    onGroupRemove={(groupId) => handleGroupRemove(category.id, groupId)}
+                    // ▲▲▲ New Removal Handlers ▲▲▲
+
                     onNameSave={(newName) => handleCategoryNameSave(category.id, newName)}
                     onEnrich={() => alert(`Enrich Cat ${category.name}`)}
                     onRunAnalysis={() => alert(`Run Analysis Cat ${category.name}`)}
@@ -131,7 +144,7 @@ function App() {
                     onGroupRunAnalysis={(groupId) => alert(`Run Analysis Group ${groupId}`)}
                     onKeywordSave={(groupId, newKw) => handleKeywordSave(category.id, groupId, newKw)}
                     onKeywordCopy={(groupId, txt) => navigator.clipboard.writeText(txt)}
-                    onKeywordEdit={noOp}
+                    onKeywordEdit={() => {}}
                 />
             ))}
         </div>

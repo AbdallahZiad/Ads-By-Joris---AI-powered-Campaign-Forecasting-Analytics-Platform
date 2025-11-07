@@ -11,23 +11,40 @@
     @apply outline-none bg-transparent text-gray-800;
     border-bottom: 2px solid #25DFD6;
     field-sizing: content;
-    min-width: 60px;
     max-width: 100%;
 }
 
+/* Base style for permanent action buttons (like Save Checkmark) */
 .actionButton {
     @apply ml-2 p-1 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600;
     flex-shrink: 0;
     border: none;
     cursor: pointer;
-    transition: opacity 0.15s ease-in-out;
+    transition: all 0.15s ease-in-out;
 }
 
-.editButton {
-    opacity: 0;
+/* Base style for buttons that only appear on hover */
+.hoverButton {
+    @apply ml-1 p-1 rounded-md text-gray-400;
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    opacity: 0; /* Hidden by default */
+    transition: all 0.15s ease-in-out;
 }
 
-.container:hover .editButton,
-:global(.header-hover-target):hover .editButton {
+/* Standard hover (like for Edit Pencil) */
+.hoverButton.standard:hover {
+    @apply bg-gray-100 text-gray-600;
+}
+
+/* Destructive hover (for Remove X) */
+.hoverButton.destructive:hover {
+    @apply bg-red-50 text-red-500;
+}
+
+/* Reveal ALL hover buttons when parent or container is hovered */
+.container:hover .hoverButton,
+:global(.header-hover-target):hover .hoverButton {
     opacity: 1;
 }
