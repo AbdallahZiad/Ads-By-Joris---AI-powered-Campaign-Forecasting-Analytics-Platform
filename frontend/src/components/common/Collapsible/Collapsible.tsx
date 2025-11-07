@@ -10,6 +10,7 @@ export interface CollapsibleProps {
     onRemove?: () => void;
     headerActions?: ReactNode;
     children: ReactNode;
+    footer?: ReactNode;
     containerClassName?: string;
     headerClassName?: string;
     contentClassName?: string;
@@ -23,9 +24,10 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                                                      title,
                                                      initialOpen = false,
                                                      onTitleSave,
-                                                     onRemove, // ▼▼▼ NEW PROP ▼▼▼
+                                                     onRemove,
                                                      headerActions,
                                                      children,
+                                                     footer,
                                                      containerClassName = '',
                                                      headerClassName = '',
                                                      contentClassName = '',
@@ -74,7 +76,7 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                         initialValue={title}
                         onSave={onTitleSave || (() => {})}
                         isEditable={!!onTitleSave}
-                        onRemove={onRemove} // ▼▼▼ Pass it down ▼▼▼
+                        onRemove={onRemove}
                         className={titleClassName}
                     />
                 </div>
@@ -100,6 +102,7 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                 )}
             </div>
 
+            {/* Animated Body */}
             <div className={`${styles.contentContainer} ${isOpen ? styles.open : ''}`}>
                 <div className={styles.innerContent}>
                     <div className={contentClassName}>
@@ -107,6 +110,12 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                     </div>
                 </div>
             </div>
+
+            {footer && (
+                <div className={styles.footer}>
+                    {footer}
+                </div>
+            )}
         </div>
     );
 };

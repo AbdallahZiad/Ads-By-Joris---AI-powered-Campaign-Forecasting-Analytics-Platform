@@ -1,5 +1,5 @@
 import React from 'react';
-import Collapsible from '../../common/Collapsable/Collapsible';
+import Collapsible from '../../common/Collapsible/Collapsible';
 import Group from '../Group/Group';
 import { Category as CategoryType } from '../../../types';
 import styles from './Category.module.css';
@@ -15,8 +15,7 @@ interface CategoryProps {
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
-    // Group handlers
-    onGroupRemove: (groupId: string) => void; // ▼▼▼ Group Remove ▼▼▼
+    onGroupRemove: (groupId: string) => void;
     onGroupNameSave: (groupId: string, newName: string) => void;
     onGroupEnrich: (groupId: string) => void;
     onGroupRunAnalysis: (groupId: string) => void;
@@ -32,11 +31,11 @@ const Category: React.FC<CategoryProps> = ({
                                                onSelect,
                                                selectedGroupIds,
                                                onGroupSelect,
-                                               onRemove, // ▼▼▼ NEW ▼▼▼
+                                               onRemove,
                                                onNameSave,
                                                onEnrich,
                                                onRunAnalysis,
-                                               onGroupRemove, // ▼▼▼ NEW ▼▼▼
+                                               onGroupRemove,
                                                onGroupNameSave,
                                                onGroupEnrich,
                                                onGroupRunAnalysis,
@@ -73,7 +72,7 @@ const Category: React.FC<CategoryProps> = ({
                     initialOpen={false}
                     selected={selectedGroupIds.has(group.id)}
                     onSelect={(isSelected) => onGroupSelect(group.id, isSelected)}
-                    onRemove={() => onGroupRemove(group.id)} // ▼▼▼ Pass down with ID ▼▼▼
+                    onRemove={() => onGroupRemove(group.id)}
                     onNameSave={(newName) => onGroupNameSave(group.id, newName)}
                     onEnrich={() => onGroupEnrich(group.id)}
                     onRunAnalysis={() => onGroupRunAnalysis(group.id)}

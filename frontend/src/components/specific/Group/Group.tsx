@@ -1,5 +1,5 @@
 import React from 'react';
-import Collapsible from '../../common/Collapsable/Collapsible';
+import Collapsible from '../../common/Collapsible/Collapsible';
 import KeywordList from '../../specific/KeywordList/KeywordList';
 import { Group as GroupType } from '../../../types';
 import styles from './Group.module.css';

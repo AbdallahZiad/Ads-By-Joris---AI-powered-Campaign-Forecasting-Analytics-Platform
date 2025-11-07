@@ -1,0 +1,44 @@
+/* This styles the Collapsible wrapper that IS the CategoryManagement component */
+.managementContainer {
+    @apply rounded-lg shadow-sm mb-4 bg-white;
+    border: 1px solid #e5e7eb;
+}
+
+/* This styles the body of the collapsible, which is the "canvas" */
+.managementContent {
+    @apply p-4;
+    background-color: #FBFBFB;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* New Footer styles */
+.footer {
+    @apply flex justify-end items-center p-4;
+    border-top: 1px solid #e5e7eb;
+    background-color: white; /* Footer has a white background */
+    gap: 0.75rem; /* space-x-3 */
+}
+
+/* Standard action button */
+.actionButton {
+    @apply px-4 py-2 rounded-md text-sm font-medium;
+    @apply bg-teal-500 text-white hover:bg-teal-600;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+/* Clear button (destructive/secondary) */
+.clearButton {
+    @apply px-4 py-2 rounded-md text-sm font-medium;
+    @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.footer {
+    @apply flex justify-end items-center p-4;
+    /* border-top is now handled by Collapsible's .footer style, but keeping it here doesn't hurt if it matches */
+    background-color: white;
+    gap: 0.75rem;
+}

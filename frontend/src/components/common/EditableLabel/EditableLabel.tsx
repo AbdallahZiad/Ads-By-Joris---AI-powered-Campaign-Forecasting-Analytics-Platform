@@ -90,7 +90,6 @@ const EditableLabel: React.FC<EditableLabelProps> = ({
         <div className={styles.container}>
       <span
           className={`${styles.labelText} ${className}`}
-          onClick={handleStartEdit}
           title={isEditable ? "Click to edit" : undefined}
       >
         {currentValue}
