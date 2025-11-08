@@ -11,7 +11,6 @@
 }
 
 .actions {
-    /* Actions must be on top */
     @apply absolute top-4 right-4 flex space-x-2 z-10;
 }
 
@@ -25,12 +24,10 @@
 }
 
 .textBlock {
-    /* Text block MUST have padding */
-    @apply w-full h-40 p-4 text-base leading-relaxed text-gray-800 font-mono m-0;
+    /* Common styles for both textarea and list container */
+    @apply w-full h-40 p-4 text-base font-mono m-0;
     overflow-y: auto;
     scrollbar-width: none;
-
-    /* ▼▼▼ FIX: Ensure text block is behind actions ▼▼▼ */
     @apply relative z-0;
 }
 
@@ -38,19 +35,68 @@
     display: none;
 }
 
-/* .noPadding class removed */
-
-.keywordList {
-    @apply whitespace-pre-wrap;
-    cursor: pointer;
-}
-
 .textarea {
+    @apply leading-relaxed text-gray-800; /* Match text styles */
     @apply resize-none border-none outline-none;
     background-color: transparent;
     @apply focus:ring-2 focus:ring-inset;
     focus-ring-color: #25DFD6;
 }
+
+/* ▼▼▼ NEW STYLES for selectable list ▼▼▼ */
+.keywordListContainer {
+    /* This container uses the .textBlock styles */
+    @apply leading-relaxed text-gray-800;
+    cursor: pointer; /* For double-click to edit */
+}
+
+.keywordItem {
+    @apply flex items-center gap-2 mb-1; /* Spacing for each keyword */
+}
+
+.keywordCheckbox {
+    /* Re-using Collapsible's elegant checkbox style */
+    appearance: none;
+    width: 1rem;  /* Slightly smaller */
+    height: 1rem; /* Slightly smaller */
+    border: 1.5px solid #d1d5db; /* gray-300 */
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    display: grid;
+    place-content: center;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+.keywordCheckbox::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    transform: scale(0);
+    transition: 0.15s transform ease-in-out;
+    box-shadow: inset 1em 1em white;
+    transform-origin: bottom left;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.keywordCheckbox:checked {
+    background-color: #14b8a6; /* teal-500 */
+    border-color: #14b8a6;
+}
+
+.keywordCheckbox:checked::before {
+    transform: scale(1);
+}
+
+.keywordCheckbox:hover {
+    border-color: #14b8a6;
+}
+
+.keywordLabel {
+    @apply flex-grow;
+    cursor: text;
+}
+/* ▲▲▲ NEW STYLES ▲▲▲ */
 
 .placeholder {
     @apply text-gray-400;

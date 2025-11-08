@@ -7,18 +7,23 @@ import styles from './Category.module.css';
 interface CategoryProps {
     category: CategoryType;
     initialOpen?: boolean;
+    // Category props
     selected: boolean;
     onSelect: (isSelected: boolean) => void;
-    selectedGroupIds: Set<string>;
-    onGroupSelect: (groupId: string, isSelected: boolean) => void;
     onRemove: () => void;
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
+    // Group props
+    selectedGroupIds: Set<string>;
+    onGroupSelect: (groupId: string, isSelected: boolean) => void;
     onGroupRemove: (groupId: string) => void;
     onGroupNameSave: (groupId: string, newName: string) => void;
     onGroupEnrich: (groupId: string) => void;
     onGroupRunAnalysis: (groupId: string) => void;
+    // Keyword props
+    selectedKeywordsByGroup: Map<string, Set<string>>; // ▼▼▼ NEW ▼▼▼
+    onKeywordSelect: (groupId: string, keyword: string, isSelected: boolean) => void; // ▼▼▼ NEW ▼▼▼
     onKeywordSave: (groupId: string, newKeywords: string[]) => void;
     onKeywordCopy: (groupId: string, keywordsText: string) => void;
     onKeywordEdit?: (groupId: string) => void;
@@ -39,6 +44,8 @@ const Category: React.FC<CategoryProps> = ({
                                                onGroupNameSave,
                                                onGroupEnrich,
                                                onGroupRunAnalysis,
+                                               selectedKeywordsByGroup, // ▼▼▼ NEW ▼▼▼
+                                               onKeywordSelect,        // ▼▼▼ NEW ▼▼▼
                                                onKeywordSave,
                                                onKeywordCopy,
                                                onKeywordEdit,
@@ -76,6 +83,11 @@ const Category: React.FC<CategoryProps> = ({
                     onNameSave={(newName) => onGroupNameSave(group.id, newName)}
                     onEnrich={() => onGroupEnrich(group.id)}
                     onRunAnalysis={() => onGroupRunAnalysis(group.id)}
+                    // ▼▼▼ Pass keyword selection props down ▼▼▼
+                    selectedKeywords={selectedKeywordsByGroup.get(group.id) || new Set()}
+                    onKeywordSelect={(keyword, isSelected) =>
+                        onKeywordSelect(group.id, keyword, isSelected)
+                    }
                     onKeywordSave={(newKeywords) => onKeywordSave(group.id, newKeywords)}
                     onKeywordCopy={(keywordsText) => onKeywordCopy(group.id, keywordsText)}
                     onKeywordEdit={() => onKeywordEdit?.(group.id)}

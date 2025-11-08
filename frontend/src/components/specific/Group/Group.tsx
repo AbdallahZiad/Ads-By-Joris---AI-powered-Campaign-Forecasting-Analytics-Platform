@@ -13,6 +13,10 @@ interface GroupProps {
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
+    // ▼▼▼ NEW PROPS ▼▼▼
+    selectedKeywords: Set<string>;
+    onKeywordSelect: (keyword: string, isSelected: boolean) => void;
+    // ▲▲▲ NEW PROPS ▲▲▲
     onKeywordSave: (newKeywords: string[]) => void;
     onKeywordCopy: (keywordsText: string) => void;
     onKeywordEdit?: () => void;
@@ -27,6 +31,8 @@ const Group: React.FC<GroupProps> = ({
                                          onNameSave,
                                          onEnrich,
                                          onRunAnalysis,
+                                         selectedKeywords,
+                                         onKeywordSelect,
                                          onKeywordSave,
                                          onKeywordCopy,
                                          onKeywordEdit,
@@ -59,6 +65,10 @@ const Group: React.FC<GroupProps> = ({
                 onCopy={onKeywordCopy}
                 onEdit={onKeywordEdit}
                 showBorder={false}
+                // ▼▼▼ Pass selection props down ▼▼▼
+                selectable={true}
+                selectedKeywords={selectedKeywords}
+                onKeywordSelect={onKeywordSelect}
             />
         </Collapsible>
     );

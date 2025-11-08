@@ -9,7 +9,9 @@ interface KeywordListProps {
     onEdit?: () => void;
     initialEditMode?: boolean;
     showBorder?: boolean;
-    // showPadding prop has been removed
+    selectable?: boolean;
+    selectedKeywords?: Set<string>;
+    onKeywordSelect?: (keyword: string, isSelected: boolean) => void;
 }
 
 const KeywordList: React.FC<KeywordListProps> = ({
@@ -19,7 +21,9 @@ const KeywordList: React.FC<KeywordListProps> = ({
                                                      onEdit,
                                                      initialEditMode = false,
                                                      showBorder = true,
-                                                     // showPadding prop has been removed
+                                                     selectable = false,
+                                                     selectedKeywords = new Set(),
+                                                     onKeywordSelect,
                                                  }) => {
     const [isEditing, setIsEditing] = useState(initialEditMode);
     const [currentKeywordsText, setCurrentKeywordsText] = useState('');
@@ -54,12 +58,7 @@ const KeywordList: React.FC<KeywordListProps> = ({
 
     const handleCopyClick = () => {
         navigator.clipboard.writeText(keywordsString)
-            .then(() => {
-                onCopy(keywordsString);
-                if (copyButtonRef.current) {
-                    copyButtonRef.current.focus();
-                }
-            })
+            .then(() => onCopy(keywordsString))
             .catch((err) => console.error('Failed to copy keywords: ', err));
     };
 
@@ -77,7 +76,6 @@ const KeywordList: React.FC<KeywordListProps> = ({
     return (
         <div className={`${styles.container} ${showBorder ? styles.withBorder : ''}`}>
             <div className={styles.content}>
-                {/* Actions are z-10 */}
                 <div className={styles.actions}>
                     {!isEditing ? (
                         <button
@@ -100,7 +98,6 @@ const KeywordList: React.FC<KeywordListProps> = ({
                     </button>
                 </div>
 
-                {/* Ternary logic restored */}
                 {isEditing ? (
                     <textarea
                         ref={textareaRef}
@@ -112,19 +109,39 @@ const KeywordList: React.FC<KeywordListProps> = ({
                         placeholder="Enter keywords, one per line..."
                     />
                 ) : (
-                    <pre
-                        className={`${styles.textBlock} ${styles.keywordList}`}
+                    // ▼▼▼ ADDED onDoubleClick HERE ▼▼▼
+                    <div
+                        className={`${styles.textBlock} ${styles.keywordListContainer}`}
                         onDoubleClick={handleEditClick}
                         title="Double-click to edit"
                     >
-            {keywords.length > 0 ? (
-                keywordsString
-            ) : (
-                <span className={styles.placeholder}>
+                        {keywords.length > 0 ? (
+                            keywords.map((keyword, index) => (
+                                // Stop propagation on individual items if needed,
+                                // but usually letting it bubble up to the container is fine for double-click.
+                                <div key={index} className={styles.keywordItem}>
+                                    {selectable && (
+                                        <input
+                                            type="checkbox"
+                                            className={styles.keywordCheckbox}
+                                            checked={selectedKeywords.has(keyword)}
+                                            // Stop propagation here so fast clicking checkboxes doesn't trigger edit
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => onKeywordSelect?.(keyword, e.target.checked)}
+                                        />
+                                    )}
+                                    <label className={styles.keywordLabel}>
+                                        {keyword}
+                                    </label>
+                                </div>
+                            ))
+                        ) : (
+                            <span className={styles.placeholder}>
                 No keywords. Double-click to add.
               </span>
-            )}
-          </pre>
+                        )}
+                    </div>
+                    // ▲▲▲ ADDED onDoubleClick HERE ▲▲▲
                 )}
             </div>
         </div>

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Category as CategoryType, Group as GroupType } from '../../../types'; // Assuming types are in App.tsx
+import { Category as CategoryType, Group as GroupType } from '../../../types';
 import Collapsible from '../../common/Collapsible/Collapsible';
 import CategoryComponent from '../Category/Category';
 import styles from './CategoryManagement.module.css';
 
-// --- MOCK DATA (Internal for now) ---
-// In the future, this would be passed as a prop or fetched
+// --- MOCK DATA ---
 const MOCK_DATA: CategoryType[] = [
     {
         id: 'c1',
@@ -36,14 +35,8 @@ const MOCK_DATA: CategoryType[] = [
     },
 ];
 
-// --- COMPONENT PROPS ---
 interface CategoryManagementProps {
-    /**
-     * The single callback for all analysis actions.
-     * Returns a filtered list of categories containing only the groups to be analyzed.
-     */
     onRunAnalysis: (selection: CategoryType[]) => void;
-    // We can add an onEnrich prop later if needed
 }
 
 const CategoryManagement: React.FC<CategoryManagementProps> = ({
@@ -52,38 +45,95 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     const [categories, setCategories] = useState<CategoryType[]>(MOCK_DATA);
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+    const [selectedKeywordsByGroup, setSelectedKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
+
+    const findGroup = (groupId: string): [CategoryType, GroupType] | [null, null] => {
+        for (const cat of categories) {
+            const group = cat.groups.find(g => g.id === groupId);
+            if (group) return [cat, group];
+        }
+        return [null, null];
+    }
 
     // --- SELECTION LOGIC ---
     const handleCategorySelect = (categoryId: string, isSelected: boolean) => {
         const newSelectedCatIds = new Set(selectedCategoryIds);
         const newSelectedGroupIds = new Set(selectedGroupIds);
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
         const category = categories.find(c => c.id === categoryId);
         if (!category) return;
 
         if (isSelected) {
             newSelectedCatIds.add(categoryId);
-            category.groups.forEach(g => newSelectedGroupIds.add(g.id));
+            category.groups.forEach(g => {
+                newSelectedGroupIds.add(g.id);
+                newSelectedKeywordsMap.set(g.id, new Set(g.keywords));
+            });
         } else {
             newSelectedCatIds.delete(categoryId);
-            category.groups.forEach(g => newSelectedGroupIds.delete(g.id));
+            category.groups.forEach(g => {
+                newSelectedGroupIds.delete(g.id);
+                newSelectedKeywordsMap.delete(g.id);
+            });
         }
         setSelectedCategoryIds(newSelectedCatIds);
         setSelectedGroupIds(newSelectedGroupIds);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
 
     const handleGroupSelect = (categoryId: string, groupId: string, isSelected: boolean) => {
         const newSelectedGroupIds = new Set(selectedGroupIds);
         const newSelectedCatIds = new Set(selectedCategoryIds);
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        const category = categories.find(c => c.id === categoryId);
+        const group = category?.groups.find(g => g.id === groupId);
+        if (!category || !group) return;
+
         if (isSelected) {
             newSelectedGroupIds.add(groupId);
-            const category = categories.find(c => c.id === categoryId);
-            if (category && category.groups.every(g => newSelectedGroupIds.has(g.id))) {
+            newSelectedKeywordsMap.set(groupId, new Set(group.keywords));
+            if (category.groups.every(g => newSelectedGroupIds.has(g.id))) {
                 newSelectedCatIds.add(categoryId);
+            }
+        } else {
+            newSelectedGroupIds.delete(groupId);
+            newSelectedKeywordsMap.delete(groupId);
+            newSelectedCatIds.delete(categoryId);
+        }
+        setSelectedGroupIds(newSelectedGroupIds);
+        setSelectedCategoryIds(newSelectedCatIds);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
+    };
+
+    const handleKeywordSelect = (categoryId: string, groupId: string, keyword: string, isSelected: boolean) => {
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        const newSelectedGroupIds = new Set(selectedGroupIds);
+        const newSelectedCatIds = new Set(selectedCategoryIds);
+
+        const groupKeywords = new Set(newSelectedKeywordsMap.get(groupId) || []);
+        if (isSelected) {
+            groupKeywords.add(keyword);
+        } else {
+            groupKeywords.delete(keyword);
+        }
+        newSelectedKeywordsMap.set(groupId, groupKeywords);
+
+        const [category, group] = findGroup(groupId);
+        if (!category || !group) return;
+
+        if (isSelected) {
+            if (group.keywords.every(k => groupKeywords.has(k))) {
+                newSelectedGroupIds.add(groupId);
+                if (category.groups.every(g => newSelectedGroupIds.has(g.id))) {
+                    newSelectedCatIds.add(categoryId);
+                }
             }
         } else {
             newSelectedGroupIds.delete(groupId);
             newSelectedCatIds.delete(categoryId);
         }
+
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
         setSelectedGroupIds(newSelectedGroupIds);
         setSelectedCategoryIds(newSelectedCatIds);
     };
@@ -93,123 +143,156 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, name: newName } : cat));
     };
     const handleCategoryRemove = (categoryId: string) => {
-        if (window.confirm("Are you sure?")) {
-            setCategories(prev => prev.filter(c => c.id !== categoryId));
-            // Cleanup selection
-            const newSelectedCatIds = new Set(selectedCategoryIds);
-            newSelectedCatIds.delete(categoryId);
-            setSelectedCategoryIds(newSelectedCatIds);
-        }
+        if (!window.confirm("Are you sure?")) return;
+        const category = categories.find(c => c.id === categoryId);
+        if (!category) return;
+        setCategories(prev => prev.filter(c => c.id !== categoryId));
+        const newSelectedCatIds = new Set(selectedCategoryIds);
+        newSelectedCatIds.delete(categoryId);
+        setSelectedCategoryIds(newSelectedCatIds);
+        const newSelectedGroupIds = new Set(selectedGroupIds);
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        category.groups.forEach(g => {
+            newSelectedGroupIds.delete(g.id);
+            newSelectedKeywordsMap.delete(g.id);
+        });
+        setSelectedGroupIds(newSelectedGroupIds);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
     const handleGroupNameSave = (categoryId: string, groupId: string, newName: string) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, name: newName } : grp) } : cat));
     };
     const handleGroupRemove = (categoryId: string, groupId: string) => {
-        if (window.confirm("Are you sure?")) {
-            setCategories(prev => prev.map(cat =>
-                cat.id === categoryId
-                    ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) }
-                    : cat
-            ));
-            const newSelectedGroupIds = new Set(selectedGroupIds);
-            newSelectedGroupIds.delete(groupId);
-            setSelectedGroupIds(newSelectedGroupIds);
-        }
+        if (!window.confirm("Are you sure?")) return;
+        setCategories(prev => prev.map(cat =>
+            cat.id === categoryId ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) } : cat
+        ));
+        const newSelectedGroupIds = new Set(selectedGroupIds);
+        newSelectedGroupIds.delete(groupId);
+        setSelectedGroupIds(newSelectedGroupIds);
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        newSelectedKeywordsMap.delete(groupId);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
     const handleKeywordSave = (categoryId: string, groupId: string, newKeywords: string[]) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, keywords: newKeywords } : grp) } : cat));
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        newSelectedKeywordsMap.delete(groupId);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
 
     // --- ANALYSIS/ACTION LOGIC ---
-    const handleCategoryEnrich = (category: CategoryType) => {
-        alert(`Enriching Category: ${category.name}`);
-    };
-    const handleGroupEnrich = (group: GroupType) => {
-        alert(`Enriching Group: ${group.name}`);
-    };
-
+    const handleCategoryEnrich = (category: CategoryType) => { alert(`Enriching Category: ${category.name}`); };
+    const handleGroupEnrich = (group: GroupType) => { alert(`Enriching Group: ${group.name}`); };
     const handleCategoryRunAnalysis = (category: CategoryType) => {
-        // Run analysis on the specific category (all its groups)
-        const selection = [{ ...category, groups: [...category.groups] }];
-        onRunAnalysis(selection);
+        onRunAnalysis([{ ...category, groups: [...category.groups] }]);
     };
     const handleGroupRunAnalysis = (category: CategoryType, group: GroupType) => {
-        // Run analysis on a specific group
-        const selection = [{ ...category, groups: [group] }];
-        onRunAnalysis(selection);
+        onRunAnalysis([{ ...category, groups: [group] }]);
     };
 
     // --- FOOTER ACTION LOGIC ---
     const handleFooterRunAnalysis = () => {
-        // Build the selection list based on selectedGroupIds
         const selection: CategoryType[] = [];
         categories.forEach(cat => {
-            const selectedGroups = cat.groups.filter(g => selectedGroupIds.has(g.id));
-            if (selectedGroups.length > 0) {
-                selection.push({ ...cat, groups: selectedGroups });
+            const selectedGroupsForCategory: GroupType[] = [];
+            cat.groups.forEach(group => {
+                const groupKeywordSelections = selectedKeywordsByGroup.get(group.id);
+                if (groupKeywordSelections && groupKeywordSelections.size > 0) {
+                    const filteredKeywords = group.keywords.filter(k => groupKeywordSelections.has(k));
+                    selectedGroupsForCategory.push({ ...group, keywords: filteredKeywords });
+                }
+            });
+            if (selectedGroupsForCategory.length > 0) {
+                selection.push({ ...cat, groups: selectedGroupsForCategory });
             }
         });
-
         if (selection.length === 0) {
-            alert("Please select at least one group to run analysis on.");
+            alert("Please select at least one keyword to run analysis on.");
             return;
         }
         onRunAnalysis(selection);
     };
 
-    const handleFooterEnrich = () => {
-        alert("Enrich on selected items... (not implemented)");
-    };
+    const handleFooterEnrich = () => { alert("Enrich on selected items... (not implemented)"); };
 
     const handleFooterClear = () => {
         setSelectedCategoryIds(new Set());
         setSelectedGroupIds(new Set());
+        setSelectedKeywordsByGroup(new Map());
     };
 
+    // ▼▼▼ NEW: Select All Logic ▼▼▼
+    const handleFooterSelectAll = () => {
+        const newSelectedCatIds = new Set<string>();
+        const newSelectedGroupIds = new Set<string>();
+        const newSelectedKeywordsMap = new Map<string, Set<string>>();
+
+        categories.forEach(cat => {
+            newSelectedCatIds.add(cat.id);
+            cat.groups.forEach(group => {
+                newSelectedGroupIds.add(group.id);
+                newSelectedKeywordsMap.set(group.id, new Set(group.keywords));
+            });
+        });
+
+        setSelectedCategoryIds(newSelectedCatIds);
+        setSelectedGroupIds(newSelectedGroupIds);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
+    };
+    // ▲▲▲ NEW: Select All Logic ▲▲▲
+
     return (
-        <>
-            <Collapsible
-                title="Category Management"
-                initialOpen={true}
-                containerClassName={styles.managementContainer}
-                contentClassName={styles.managementContent}
-                footer={
-                    <div className={styles.footer}>
-                        <button className={styles.actionButton} onClick={handleFooterEnrich}>
-                            Enrich
-                        </button>
-                        <button className={styles.actionButton} onClick={handleFooterRunAnalysis}>
-                            Run Analysis
-                        </button>
-                        <button className={styles.clearButton} onClick={handleFooterClear}>
-                            Clear Selections
-                        </button>
-                    </div>
-                }
-            >
-                {categories.map((category) => (
-                    <CategoryComponent
-                        key={category.id}
-                        category={category}
-                        initialOpen={false}
-                        selected={selectedCategoryIds.has(category.id)}
-                        onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
-                        selectedGroupIds={selectedGroupIds}
-                        onGroupSelect={(groupId, isSelected) => handleGroupSelect(category.id, groupId, isSelected)}
-                        onRemove={() => handleCategoryRemove(category.id)}
-                        onNameSave={(newName) => handleCategoryNameSave(category.id, newName)}
-                        onEnrich={() => handleCategoryEnrich(category)}
-                        onRunAnalysis={() => handleCategoryRunAnalysis(category)}
-                        onGroupRemove={(groupId) => handleGroupRemove(category.id, groupId)}
-                        onGroupNameSave={(groupId, newName) => handleGroupNameSave(category.id, groupId, newName)}
-                        onGroupEnrich={(groupId) => handleGroupEnrich(category.groups.find(g => g.id === groupId)!)}
-                        onGroupRunAnalysis={(groupId) => handleGroupRunAnalysis(category, category.groups.find(g => g.id === groupId)!)}
-                        onKeywordSave={(groupId, newKw) => handleKeywordSave(category.id, groupId, newKw)}
-                        onKeywordCopy={() => {}}
-                    />
-                ))}
-            </Collapsible>
-        </>
+        <Collapsible
+            title="Category Management"
+            initialOpen={true}
+            containerClassName={styles.managementContainer}
+            contentClassName={styles.managementContent}
+            footer={
+                <div className={styles.footer}>
+                    {/* ▼▼▼ REORDERED FOOTER BUTTONS ▼▼▼ */}
+                    <button className={styles.actionButton} onClick={handleFooterEnrich}>
+                        Enrich
+                    </button>
+                    <button className={styles.actionButton} onClick={handleFooterRunAnalysis}>
+                        Run Analysis
+                    </button>
+                    <button className={styles.secondaryButton} onClick={handleFooterSelectAll}>
+                        Select All
+                    </button>
+                    <button className={styles.secondaryButton} onClick={handleFooterClear}>
+                        Clear Selections
+                    </button>
+                    {/* ▲▲▲ REORDERED FOOTER BUTTONS ▲▲▲ */}
+                </div>
+            }
+        >
+            {categories.map((category) => (
+                <CategoryComponent
+                    key={category.id}
+                    category={category}
+                    initialOpen={category.id === 'c1'}
+                    selected={selectedCategoryIds.has(category.id)}
+                    onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
+                    selectedGroupIds={selectedGroupIds}
+                    onGroupSelect={(groupId, isSelected) => handleGroupSelect(category.id, groupId, isSelected)}
+                    onRemove={() => handleCategoryRemove(category.id)}
+                    onNameSave={(newName) => handleCategoryNameSave(category.id, newName)}
+                    onEnrich={() => handleCategoryEnrich(category)}
+                    onRunAnalysis={() => handleCategoryRunAnalysis(category)}
+                    onGroupRemove={(groupId) => handleGroupRemove(category.id, groupId)}
+                    onGroupNameSave={(groupId, newName) => handleGroupNameSave(category.id, groupId, newName)}
+                    onGroupEnrich={(groupId) => handleGroupEnrich(category.groups.find(g => g.id === groupId)!)}
+                    onGroupRunAnalysis={(groupId) => handleGroupRunAnalysis(category, category.groups.find(g => g.id === groupId)!)}
+                    selectedKeywordsByGroup={selectedKeywordsByGroup}
+                    onKeywordSelect={(groupId, keyword, isSelected) =>
+                        handleKeywordSelect(category.id, groupId, keyword, isSelected)
+                    }
+                    onKeywordSave={(groupId, newKw) => handleKeywordSave(category.id, groupId, newKw)}
+                    onKeywordCopy={() => {}}
+                />
+            ))}
+        </Collapsible>
     );
 };
 
