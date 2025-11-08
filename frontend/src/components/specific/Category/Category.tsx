@@ -1,32 +1,31 @@
 import React from 'react';
 import Collapsible from '../../common/Collapsible/Collapsible';
 import Group from '../Group/Group';
+import AddItemButton from '../../common/AddItemButton/AddItemButton';
 import { Category as CategoryType } from '../../../types';
 import styles from './Category.module.css';
 
 interface CategoryProps {
     category: CategoryType;
     initialOpen?: boolean;
-    // Category props
     selected: boolean;
     onSelect: (isSelected: boolean) => void;
     onRemove: () => void;
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
-    // Group props
+    onGroupAdd: (categoryId: string) => void;
     selectedGroupIds: Set<string>;
     onGroupSelect: (groupId: string, isSelected: boolean) => void;
     onGroupRemove: (groupId: string) => void;
     onGroupNameSave: (groupId: string, newName: string) => void;
     onGroupEnrich: (groupId: string) => void;
     onGroupRunAnalysis: (groupId: string) => void;
-    // Keyword props
-    selectedKeywordsByGroup: Map<string, Set<string>>; // ▼▼▼ NEW ▼▼▼
-    onKeywordSelect: (groupId: string, keyword: string, isSelected: boolean) => void; // ▼▼▼ NEW ▼▼▼
     onKeywordSave: (groupId: string, newKeywords: string[]) => void;
     onKeywordCopy: (groupId: string, keywordsText: string) => void;
     onKeywordEdit?: (groupId: string) => void;
+    selectedKeywordsByGroup: Map<string, Set<string>>;
+    onKeywordSelect: (groupId: string, keyword: string, isSelected: boolean) => void;
 }
 
 const Category: React.FC<CategoryProps> = ({
@@ -34,21 +33,22 @@ const Category: React.FC<CategoryProps> = ({
                                                initialOpen = false,
                                                selected,
                                                onSelect,
-                                               selectedGroupIds,
-                                               onGroupSelect,
                                                onRemove,
                                                onNameSave,
                                                onEnrich,
                                                onRunAnalysis,
+                                               onGroupAdd,
+                                               selectedGroupIds,
+                                               onGroupSelect,
                                                onGroupRemove,
                                                onGroupNameSave,
                                                onGroupEnrich,
                                                onGroupRunAnalysis,
-                                               selectedKeywordsByGroup, // ▼▼▼ NEW ▼▼▼
-                                               onKeywordSelect,        // ▼▼▼ NEW ▼▼▼
                                                onKeywordSave,
                                                onKeywordCopy,
                                                onKeywordEdit,
+                                               selectedKeywordsByGroup,
+                                               onKeywordSelect,
                                            }) => {
     return (
         <Collapsible
@@ -83,7 +83,6 @@ const Category: React.FC<CategoryProps> = ({
                     onNameSave={(newName) => onGroupNameSave(group.id, newName)}
                     onEnrich={() => onGroupEnrich(group.id)}
                     onRunAnalysis={() => onGroupRunAnalysis(group.id)}
-                    // ▼▼▼ Pass keyword selection props down ▼▼▼
                     selectedKeywords={selectedKeywordsByGroup.get(group.id) || new Set()}
                     onKeywordSelect={(keyword, isSelected) =>
                         onKeywordSelect(group.id, keyword, isSelected)
@@ -93,6 +92,12 @@ const Category: React.FC<CategoryProps> = ({
                     onKeywordEdit={() => onKeywordEdit?.(group.id)}
                 />
             ))}
+
+            <AddItemButton
+                label="Add Group"
+                onClick={() => onGroupAdd(category.id)}
+                className="mt-2" // Add a little top margin for breathing room
+            />
         </Collapsible>
     );
 };

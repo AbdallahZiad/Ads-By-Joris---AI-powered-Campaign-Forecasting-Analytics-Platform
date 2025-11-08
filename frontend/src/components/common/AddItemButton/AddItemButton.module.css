@@ -1,0 +1,16 @@
+.button {
+    @apply flex items-center p-2 text-sm font-medium text-gray-500;
+    @apply transition-colors duration-150 ease-in-out;
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: fit-content; /* Don't take full width */
+}
+
+.button:hover {
+    @apply text-teal-500;
+}
+
+.icon {
+    margin-right: 0.5rem;
+}

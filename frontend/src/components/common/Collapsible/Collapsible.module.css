@@ -41,10 +41,12 @@
     transform: rotate(180deg);
 }
 
+/* ▼▼▼ FIX: Changed from '1 1 auto' to '0 1 auto' so it doesn't grow */
 .labelWrapper {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
 }
+/* ▲▲▲ FIX ▲▲▲ */
 
 .spacer {
     flex-grow: 1;
@@ -65,22 +67,19 @@
     opacity: 1;
 }
 
-/* ▼▼▼ NEW: Checkbox Styles ▼▼▼ */
 .checkboxContainer {
     display: flex;
     align-items: center;
     margin-left: 1rem;
     flex-shrink: 0;
-    /* Always visible, unlike headerActions */
     opacity: 1;
 }
 
 .checkbox {
-    /* Customizing the native checkbox for elegance */
     appearance: none;
     width: 1.25rem;
     height: 1.25rem;
-    border: 1.5px solid #d1d5db; /* gray-300 */
+    border: 1.5px solid #d1d5db;
     border-radius: 0.25rem;
     cursor: pointer;
     transition: all 0.15s ease-in-out;
@@ -100,7 +99,7 @@
 }
 
 .checkbox:checked {
-    background-color: #14b8a6; /* teal-500, matches your buttons */
+    background-color: #14b8a6;
     border-color: #14b8a6;
 }
 
@@ -127,15 +126,7 @@
     min-height: 0;
 }
 
-.contentContainer.open {
-    grid-template-rows: 1fr;
-}
-
-.innerContent {
-    min-height: 0;
-}
-
 .footer {
-    border-top: 1px solid #e5e7eb; /* Separator from content */
+    border-top: 1px solid #e5e7eb;
     background-color: white;
 }

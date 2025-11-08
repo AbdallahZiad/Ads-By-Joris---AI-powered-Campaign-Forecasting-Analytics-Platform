@@ -71,7 +71,7 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                     />
                 </button>
 
-                <div className={styles.labelWrapper} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.labelWrapper}>
                     <EditableLabel
                         initialValue={title}
                         onSave={onTitleSave || (() => {})}
@@ -102,7 +102,6 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                 )}
             </div>
 
-            {/* Animated Body */}
             <div className={`${styles.contentContainer} ${isOpen ? styles.open : ''}`}>
                 <div className={styles.innerContent}>
                     <div className={contentClassName}>

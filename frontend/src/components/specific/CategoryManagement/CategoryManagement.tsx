@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Category as CategoryType, Group as GroupType } from '../../../types';
 import Collapsible from '../../common/Collapsible/Collapsible';
+import AddItemButton from '../../common/AddItemButton/AddItemButton';
 import CategoryComponent from '../Category/Category';
 import styles from './CategoryManagement.module.css';
 
@@ -46,6 +47,9 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
     const [selectedKeywordsByGroup, setSelectedKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
+
+    // Simple ID generator for new items
+    const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
     const findGroup = (groupId: string): [CategoryType, GroupType] | [null, null] => {
         for (const cat of categories) {
@@ -139,11 +143,37 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     };
 
     // --- DATA MUTATION LOGIC ---
+
+    const handleAddCategory = () => {
+        const newCategory: CategoryType = {
+            id: generateId('c'),
+            name: 'New Category',
+            groups: [],
+        };
+        setCategories(prev => [...prev, newCategory]);
+    };
+
+    const handleAddGroup = (categoryId: string) => {
+        setCategories(prev => prev.map(cat => {
+            if (cat.id === categoryId) {
+                return {
+                    ...cat,
+                    groups: [...cat.groups, {
+                        id: generateId('g'),
+                        name: 'New Group',
+                        keywords: []
+                    }]
+                };
+            }
+            return cat;
+        }));
+    };
+
     const handleCategoryNameSave = (categoryId: string, newName: string) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, name: newName } : cat));
     };
     const handleCategoryRemove = (categoryId: string) => {
-        if (!window.confirm("Are you sure?")) return;
+        if (!window.confirm("Are you sure you want to delete this category?")) return;
         const category = categories.find(c => c.id === categoryId);
         if (!category) return;
         setCategories(prev => prev.filter(c => c.id !== categoryId));
@@ -163,7 +193,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, name: newName } : grp) } : cat));
     };
     const handleGroupRemove = (categoryId: string, groupId: string) => {
-        if (!window.confirm("Are you sure?")) return;
+        if (!window.confirm("Are you sure you want to delete this group?")) return;
         setCategories(prev => prev.map(cat =>
             cat.id === categoryId ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) } : cat
         ));
@@ -184,14 +214,9 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     // --- ANALYSIS/ACTION LOGIC ---
     const handleCategoryEnrich = (category: CategoryType) => { alert(`Enriching Category: ${category.name}`); };
     const handleGroupEnrich = (group: GroupType) => { alert(`Enriching Group: ${group.name}`); };
-    const handleCategoryRunAnalysis = (category: CategoryType) => {
-        onRunAnalysis([{ ...category, groups: [...category.groups] }]);
-    };
-    const handleGroupRunAnalysis = (category: CategoryType, group: GroupType) => {
-        onRunAnalysis([{ ...category, groups: [group] }]);
-    };
+    const handleCategoryRunAnalysis = (category: CategoryType) => { onRunAnalysis([{ ...category, groups: [...category.groups] }]); };
+    const handleGroupRunAnalysis = (category: CategoryType, group: GroupType) => { onRunAnalysis([{ ...category, groups: [group] }]); };
 
-    // --- FOOTER ACTION LOGIC ---
     const handleFooterRunAnalysis = () => {
         const selection: CategoryType[] = [];
         categories.forEach(cat => {
@@ -222,12 +247,10 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setSelectedKeywordsByGroup(new Map());
     };
 
-    // ▼▼▼ NEW: Select All Logic ▼▼▼
     const handleFooterSelectAll = () => {
         const newSelectedCatIds = new Set<string>();
         const newSelectedGroupIds = new Set<string>();
         const newSelectedKeywordsMap = new Map<string, Set<string>>();
-
         categories.forEach(cat => {
             newSelectedCatIds.add(cat.id);
             cat.groups.forEach(group => {
@@ -235,64 +258,71 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                 newSelectedKeywordsMap.set(group.id, new Set(group.keywords));
             });
         });
-
         setSelectedCategoryIds(newSelectedCatIds);
         setSelectedGroupIds(newSelectedGroupIds);
         setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
-    // ▲▲▲ NEW: Select All Logic ▲▲▲
 
     return (
-        <Collapsible
-            title="Category Management"
-            initialOpen={true}
-            containerClassName={styles.managementContainer}
-            contentClassName={styles.managementContent}
-            footer={
-                <div className={styles.footer}>
-                    {/* ▼▼▼ REORDERED FOOTER BUTTONS ▼▼▼ */}
-                    <button className={styles.actionButton} onClick={handleFooterEnrich}>
-                        Enrich
-                    </button>
-                    <button className={styles.actionButton} onClick={handleFooterRunAnalysis}>
-                        Run Analysis
-                    </button>
-                    <button className={styles.secondaryButton} onClick={handleFooterSelectAll}>
-                        Select All
-                    </button>
-                    <button className={styles.secondaryButton} onClick={handleFooterClear}>
-                        Clear Selections
-                    </button>
-                    {/* ▲▲▲ REORDERED FOOTER BUTTONS ▲▲▲ */}
-                </div>
-            }
-        >
-            {categories.map((category) => (
-                <CategoryComponent
-                    key={category.id}
-                    category={category}
-                    initialOpen={category.id === 'c1'}
-                    selected={selectedCategoryIds.has(category.id)}
-                    onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
-                    selectedGroupIds={selectedGroupIds}
-                    onGroupSelect={(groupId, isSelected) => handleGroupSelect(category.id, groupId, isSelected)}
-                    onRemove={() => handleCategoryRemove(category.id)}
-                    onNameSave={(newName) => handleCategoryNameSave(category.id, newName)}
-                    onEnrich={() => handleCategoryEnrich(category)}
-                    onRunAnalysis={() => handleCategoryRunAnalysis(category)}
-                    onGroupRemove={(groupId) => handleGroupRemove(category.id, groupId)}
-                    onGroupNameSave={(groupId, newName) => handleGroupNameSave(category.id, groupId, newName)}
-                    onGroupEnrich={(groupId) => handleGroupEnrich(category.groups.find(g => g.id === groupId)!)}
-                    onGroupRunAnalysis={(groupId) => handleGroupRunAnalysis(category, category.groups.find(g => g.id === groupId)!)}
-                    selectedKeywordsByGroup={selectedKeywordsByGroup}
-                    onKeywordSelect={(groupId, keyword, isSelected) =>
-                        handleKeywordSelect(category.id, groupId, keyword, isSelected)
-                    }
-                    onKeywordSave={(groupId, newKw) => handleKeywordSave(category.id, groupId, newKw)}
-                    onKeywordCopy={() => {}}
+        <>
+            <Collapsible
+                title="Category Management"
+                initialOpen={true}
+                containerClassName={styles.managementContainer}
+                contentClassName={styles.managementContent}
+                footer={
+                    <div className={styles.footer}>
+                        <button className={styles.actionButton} onClick={handleFooterEnrich}>
+                            Enrich
+                        </button>
+                        <button className={styles.actionButton} onClick={handleFooterRunAnalysis}>
+                            Run Analysis
+                        </button>
+                        <button className={styles.secondaryButton} onClick={handleFooterSelectAll}>
+                            Select All
+                        </button>
+                        <button className={styles.secondaryButton} onClick={handleFooterClear}>
+                            Clear Selections
+                        </button>
+                    </div>
+                }
+            >
+                {categories.map((category) => (
+                    <CategoryComponent
+                        key={category.id}
+                        category={category}
+                        initialOpen={category.id === 'c1'}
+                        selected={selectedCategoryIds.has(category.id)}
+                        onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
+                        selectedGroupIds={selectedGroupIds}
+                        onGroupSelect={(groupId, isSelected) => handleGroupSelect(category.id, groupId, isSelected)}
+                        onRemove={() => handleCategoryRemove(category.id)}
+                        onNameSave={(newName) => handleCategoryNameSave(category.id, newName)}
+                        onEnrich={() => handleCategoryEnrich(category)}
+                        onRunAnalysis={() => handleCategoryRunAnalysis(category)}
+
+                        onGroupAdd={handleAddGroup}
+
+                        onGroupRemove={(groupId) => handleGroupRemove(category.id, groupId)}
+                        onGroupNameSave={(groupId, newName) => handleGroupNameSave(category.id, groupId, newName)}
+                        onGroupEnrich={(groupId) => handleGroupEnrich(category.groups.find(g => g.id === groupId)!)}
+                        onGroupRunAnalysis={(groupId) => handleGroupRunAnalysis(category, category.groups.find(g => g.id === groupId)!)}
+                        selectedKeywordsByGroup={selectedKeywordsByGroup}
+                        onKeywordSelect={(groupId, keyword, isSelected) =>
+                            handleKeywordSelect(category.id, groupId, keyword, isSelected)
+                        }
+                        onKeywordSave={(groupId, newKw) => handleKeywordSave(category.id, groupId, newKw)}
+                        onKeywordCopy={() => {}}
+                    />
+                ))}
+
+                <AddItemButton
+                    label="Add Category"
+                    onClick={handleAddCategory}
+                    className="mt-2"
                 />
-            ))}
-        </Collapsible>
+            </Collapsible>
+        </>
     );
 };
 
