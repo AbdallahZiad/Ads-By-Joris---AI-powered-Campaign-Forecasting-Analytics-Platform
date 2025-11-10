@@ -1,0 +1,50 @@
+.groupContainer {
+    @apply bg-white border border-gray-200 rounded-md mb-3;
+    overflow: hidden;
+}
+
+.groupContent {
+    /* Maintains your desired indentation */
+    @apply bg-white pl-11 pr-4 pb-4;
+}
+
+/* ▼▼▼ NEW: Localized Header for perfect alignment ▼▼▼ */
+.headerRow {
+    display: grid;
+    /* EXACT SAME GRID AS ROW for perfect alignment */
+    grid-template-columns: 1.5rem minmax(180px, 1fr) 5.5rem 5rem 5rem 6rem 4.5rem 4.5rem 4.5rem 4.5rem;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem; /* Slightly tighter vertically than data rows */
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 0.5rem; /* Space between header and first row */
+
+    /* Typography */
+    font-size: 0.7rem; /* xs */
+    font-weight: 700;
+    letter-spacing: 0.05em; /* tracking-wider */
+    text-transform: uppercase;
+    color: #6b7280; /* text-gray-500 */
+}
+
+/* Header-specific column styles */
+.headerStat {
+    text-align: right;
+}
+
+/* Matches the Forecast visual cue in the rows */
+.forecastHeader {
+    border-left: 1px solid #e0e7ff; /* indigo-100 */
+    padding-left: 0.5rem;
+    color: #818cf8; /* indigo-400 */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+}
+
+.forecastStat {
+    text-align: right;
+    color: #818cf8; /* indigo-400 */
+}
+/* ▲▲▲ NEW ▲▲▲ */

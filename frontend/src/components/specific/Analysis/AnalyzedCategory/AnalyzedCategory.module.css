@@ -1,0 +1,11 @@
+.categoryContainer {
+    @apply rounded-lg shadow-sm mb-4 bg-white;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+
+.categoryContent {
+    @apply p-4;
+    background-color: #FBFBFB;
+    border-top: 1px solid #e5e7eb;
+}
