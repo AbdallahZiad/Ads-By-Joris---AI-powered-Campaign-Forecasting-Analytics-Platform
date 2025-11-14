@@ -1,0 +1,20 @@
+.container {
+    @apply bg-white p-4 border border-gray-200 rounded-lg mb-4;
+}
+
+.title {
+    @apply text-base font-semibold text-gray-800 mb-1;
+}
+
+.description {
+    @apply text-sm text-gray-500 mb-4;
+}
+
+.grid {
+    display: grid;
+    @apply grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4;
+}
+
+.label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+}

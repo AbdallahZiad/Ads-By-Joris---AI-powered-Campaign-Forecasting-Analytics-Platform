@@ -3,7 +3,11 @@ import { Category, AnalyzedCategory, UnifiedKeywordResult, KeywordForecast, Anal
 import { mockApi } from '../api/mockApi';
 import { normalize } from '../utils/text';
 
-export const useKeywordAnalysis = (selection: Category[]) => {
+export const useKeywordAnalysis = (
+    selection: Category[],
+    countryId?: string,
+    languageId?: string
+) => {
     const [historyData, setHistoryData] = useState<Map<string, UnifiedKeywordResult>>(new Map());
     const [forecastData, setForecastData] = useState<Map<string, KeywordForecast>>(new Map());
     const [isLoading, setIsLoading] = useState({ history: false, forecast: false });
@@ -18,6 +22,9 @@ export const useKeywordAnalysis = (selection: Category[]) => {
         const keywordList = Array.from(allKeywords);
 
         if (keywordList.length === 0) return;
+
+        // Log to show the settings have arrived (we will use these in API calls later)
+        console.log("HOOK: Fetching data with settings:", { countryId, languageId });
 
         setIsLoading(prev => ({ ...prev, history: true }));
         mockApi.fetchHistory(keywordList).then(results => {
@@ -34,7 +41,8 @@ export const useKeywordAnalysis = (selection: Category[]) => {
             setForecastData(newMap);
             setIsLoading(prev => ({ ...prev, forecast: false }));
         });
-    }, [selection]);
+        // Add countryId and languageId to dependency array
+    }, [selection, countryId, languageId]);
 
     // The "Inflator"
     const analyzedCategories: AnalyzedCategory[] = useMemo(() => {

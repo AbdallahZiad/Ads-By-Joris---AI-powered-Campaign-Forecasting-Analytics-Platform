@@ -3,15 +3,27 @@ import { motion, Variants } from 'framer-motion';
 import { Category } from './types';
 import CategoryManagement from './components/specific/CategoryManagement/CategoryManagement';
 import KeywordAnalysis from './components/specific/Analysis/KeywordAnalysis';
+import './index.css';
 
 type ViewMode = 'management' | 'analysis';
 
+// Store all analysis inputs together
+interface AnalysisInputs {
+    selection: Category[];
+    countryId?: string;
+    languageId?: string;
+}
+
 function App() {
     const [viewMode, setViewMode] = useState<ViewMode>('management');
-    const [analysisData, setAnalysisData] = useState<Category[] | null>(null);
+    const [analysisInputs, setAnalysisInputs] = useState<AnalysisInputs | null>(null);
 
-    const handleRunAnalysis = (selection: Category[]) => {
-        setAnalysisData(selection);
+    const handleRunAnalysis = (
+        selection: Category[],
+        countryId: string | undefined,
+        languageId: string | undefined
+    ) => {
+        setAnalysisInputs({ selection, countryId, languageId });
         setViewMode('analysis');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -29,7 +41,6 @@ function App() {
             display: 'block',
             transition: {
                 duration: 0.4,
-                // FIX: Use 'as const' to tell TS this is a specific cubic-bezier tuple, not a generic number[]
                 ease: [0.2, 0, 0.2, 1] as const,
                 delay: 0.1
             }
@@ -40,7 +51,6 @@ function App() {
             scale: 0.98,
             transition: {
                 duration: 0.3,
-                // FIX: Use 'as const' here as well
                 ease: [0.4, 0, 1, 1] as const
             },
             transitionEnd: {
@@ -50,20 +60,15 @@ function App() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* CSS Grid Trick: Place both views in the same grid cell (row 1, col 1).
-                They will overlap perfectly. We use Framer Motion to fade them in/out.
-                'items-start' ensures they align at the top.
-            */}
+        <div className="min-h-screen main-container">
             <div className="grid grid-cols-1 grid-rows-1 items-start">
 
-                {/* VIEW 1: Category Management (Always Mounted to preserve state) */}
+                {/* VIEW 1: Category Management (Always Mounted) */}
                 <motion.div
                     className="col-start-1 row-start-1 w-full"
                     initial="active"
                     animate={viewMode === 'management' ? 'active' : 'inactive'}
                     variants={variants}
-                    // Ensure hidden view doesn't block pointer events during transition
                     style={{ pointerEvents: viewMode === 'management' ? 'auto' : 'none', zIndex: viewMode === 'management' ? 1 : 0 }}
                 >
                     <div className="max-w-5xl mx-auto p-6">
@@ -74,8 +79,8 @@ function App() {
                     </div>
                 </motion.div>
 
-                {/* VIEW 2: Keyword Analysis (Can be conditionally mounted if desired, but keeping it mounted is safer for consistency if you ever want to preserve its state too) */}
-                {analysisData && (
+                {/* VIEW 2: Keyword Analysis (Mounted when data is ready) */}
+                {analysisInputs && (
                     <motion.div
                         className="col-start-1 row-start-1 w-full"
                         initial="inactive"
@@ -84,7 +89,9 @@ function App() {
                         style={{ pointerEvents: viewMode === 'analysis' ? 'auto' : 'none', zIndex: viewMode === 'analysis' ? 1 : 0 }}
                     >
                         <KeywordAnalysis
-                            selection={analysisData}
+                            selection={analysisInputs.selection}
+                            countryId={analysisInputs.countryId}
+                            languageId={analysisInputs.languageId}
                             onBack={handleBackToManagement}
                         />
                     </motion.div>

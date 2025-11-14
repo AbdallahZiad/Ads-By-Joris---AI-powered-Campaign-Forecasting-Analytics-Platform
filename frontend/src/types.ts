@@ -81,3 +81,8 @@ export interface AnalyzedCategory {
     name: string;
     groups: AnalyzedGroup[];
 }
+
+export interface SelectOption {
+    id: string;
+    name: string;
+}
