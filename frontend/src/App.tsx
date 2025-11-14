@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react'; // Import useRef
 import { motion, Variants } from 'framer-motion';
 import { Category } from './types';
 import CategoryManagement from './components/specific/CategoryManagement/CategoryManagement';
 import KeywordAnalysis from './components/specific/Analysis/KeywordAnalysis';
+import Navbar from './components/common/Navbar/Navbar';
+import Sidebar from './components/common/Sidebar/Sidebar';
 import './index.css';
 
 type ViewMode = 'management' | 'analysis';
@@ -18,6 +20,9 @@ function App() {
     const [viewMode, setViewMode] = useState<ViewMode>('management');
     const [analysisInputs, setAnalysisInputs] = useState<AnalysisInputs | null>(null);
 
+    // ▼▼▼ Create a ref for the main content area ▼▼▼
+    const mainContentRef = useRef<HTMLElement>(null);
+
     const handleRunAnalysis = (
         selection: Category[],
         countryId: string | undefined,
@@ -25,11 +30,19 @@ function App() {
     ) => {
         setAnalysisInputs({ selection, countryId, languageId });
         setViewMode('analysis');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // ▼▼▼ Use the ref to scroll the <main> element ▼▼▼
+        if (mainContentRef.current) {
+            mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     };
 
     const handleBackToManagement = () => {
         setViewMode('management');
+        // We can also scroll to top when going back, if desired
+        if (mainContentRef.current) {
+            mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     };
 
     // Elegant transition variants with fixed types
@@ -61,41 +74,52 @@ function App() {
 
     return (
         <div className="min-h-screen main-container">
-            <div className="grid grid-cols-1 grid-rows-1 items-start">
+            <Navbar />
 
-                {/* VIEW 1: Category Management (Always Mounted) */}
-                <motion.div
-                    className="col-start-1 row-start-1 w-full"
-                    initial="active"
-                    animate={viewMode === 'management' ? 'active' : 'inactive'}
-                    variants={variants}
-                    style={{ pointerEvents: viewMode === 'management' ? 'auto' : 'none', zIndex: viewMode === 'management' ? 1 : 0 }}
-                >
-                    <div className="max-w-5xl mx-auto p-6">
-                        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-                            Keyword Strategy Planner
-                        </h1>
-                        <CategoryManagement onRunAnalysis={handleRunAnalysis} />
+            <div className="flex flex-1 overflow-hidden">
+                <Sidebar viewMode={viewMode} />
+
+                {/* ▼▼▼ Attach the ref to the <main> element ▼▼▼ */}
+                <main ref={mainContentRef} className="flex-1 overflow-y-auto ml-16 bg-gray-100 p-6">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="grid grid-cols-1 grid-rows-1 items-start">
+                            {/* VIEW 1: Category Management (Always Mounted) */}
+                            <motion.div
+                                className="col-start-1 row-start-1 w-full"
+                                initial="active"
+                                animate={viewMode === 'management' ? 'active' : 'inactive'}
+                                variants={variants}
+                                style={{
+                                    pointerEvents: viewMode === 'management' ? 'auto' : 'none',
+                                    zIndex: viewMode === 'management' ? 1 : 0
+                                }}
+                            >
+                                <CategoryManagement onRunAnalysis={handleRunAnalysis} />
+                            </motion.div>
+
+                            {/* VIEW 2: Keyword Analysis (Mounted when data is ready) */}
+                            {analysisInputs && (
+                                <motion.div
+                                    className="col-start-1 row-start-1 w-full"
+                                    initial="inactive"
+                                    animate={viewMode === 'analysis' ? 'active' : 'inactive'}
+                                    variants={variants}
+                                    style={{
+                                        pointerEvents: viewMode === 'analysis' ? 'auto' : 'none',
+                                        zIndex: viewMode === 'analysis' ? 20 : 0
+                                    }}
+                                >
+                                    <KeywordAnalysis
+                                        selection={analysisInputs.selection}
+                                        countryId={analysisInputs.countryId}
+                                        languageId={analysisInputs.languageId}
+                                        onBack={handleBackToManagement}
+                                    />
+                                </motion.div>
+                            )}
+                        </div>
                     </div>
-                </motion.div>
-
-                {/* VIEW 2: Keyword Analysis (Mounted when data is ready) */}
-                {analysisInputs && (
-                    <motion.div
-                        className="col-start-1 row-start-1 w-full"
-                        initial="inactive"
-                        animate={viewMode === 'analysis' ? 'active' : 'inactive'}
-                        variants={variants}
-                        style={{ pointerEvents: viewMode === 'analysis' ? 'auto' : 'none', zIndex: viewMode === 'analysis' ? 1 : 0 }}
-                    >
-                        <KeywordAnalysis
-                            selection={analysisInputs.selection}
-                            countryId={analysisInputs.countryId}
-                            languageId={analysisInputs.languageId}
-                            onBack={handleBackToManagement}
-                        />
-                    </motion.div>
-                )}
+                </main>
             </div>
         </div>
     );

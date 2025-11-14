@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    /* Do NOT set overflow: hidden here, let the app container manage it */
+}
+
+/* This is the root App component's container */
 .main-container {
-    background-color: #E7E7E7;
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Make the app fill the viewport vertically */
+    overflow: hidden; /* Prevent the whole app from scrolling */
 }

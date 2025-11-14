@@ -1,0 +1,53 @@
+.sidebar {
+    @apply flex flex-col items-center justify-between;
+    @apply w-16 flex-shrink-0;
+    @apply bg-gray-800 py-4;
+
+    @apply fixed left-0 top-14 bottom-0;
+    box-shadow: 1px 0px 3px 0px rgb(0 0 0 / 0.1), 1px 0px 2px -1px rgb(0 0 0 / 0.1);
+    z-index: 10;
+}
+
+.navSection {
+    @apply flex flex-col items-center gap-2;
+    /* We need position relative for the active indicator's parent */
+    @apply relative;
+}
+
+.navButton {
+    @apply flex h-10 w-10 items-center justify-center;
+    @apply rounded-lg text-gray-300;
+    @apply transition-colors duration-150 ease-in-out;
+    @apply hover:bg-gray-700 hover:text-white;
+    /* The button MUST be relative for the absolute indicator */
+    @apply relative;
+}
+
+/* The animated teal background ▼▼▼ */
+.activeIndicator {
+    @apply absolute inset-0 bg-teal-500 rounded-lg;
+    z-index: 1;
+}
+
+/* Wrapper to keep icon on top ▼▼▼ */
+.iconWrapper {
+    @apply relative z-10;
+    /* Ensure icon itself is centered (flex) */
+    @apply flex items-center justify-center;
+}
+
+.navButtonActiveText {
+    @apply text-white;
+}
+
+
+.profileButton {
+    @apply flex h-10 w-10 items-center justify-center rounded-full;
+    @apply bg-gray-700 text-gray-300;
+    @apply transition-colors duration-150 ease-in-out;
+    @apply hover:bg-gray-600 hover:text-white;
+}
+
+.profileImage {
+    @apply h-8 w-8 rounded-full object-cover;
+}

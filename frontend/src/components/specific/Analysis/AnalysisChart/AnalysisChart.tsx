@@ -19,7 +19,7 @@ import zoomPlugin from 'chartjs-plugin-zoom';
 import { format } from 'date-fns';
 import { HiArrowsExpand, HiOutlineMinusSm, HiRefresh, HiEye, HiEyeOff } from 'react-icons/hi';
 import { AnalyzedKeyword } from '../../../../types';
-import {COLORS, MONTH_MAP} from "../../../../constants.ts";
+import { COLORS, MONTH_MAP } from "../../../../constants";
 
 ChartJS.register(
     CategoryScale,
@@ -120,9 +120,9 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
-                mode: 'nearest',  // Find the single nearest point
-                axis: 'xy',       // Consider both X and Y distance (better for overlapping lines)
-                intersect: true,  // Only trigger when mouse actually 'hits' the point (uses pointHitRadius)
+                mode: 'nearest',// Find the single nearest point
+                axis: 'xy', // Consider both X and Y distance (better for overlapping lines)
+                intersect: true, // Only trigger when mouse actually 'hits' the point (uses pointHitRadius)
             },
             animation: { duration: 800 },
             layout: {
@@ -199,8 +199,6 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
                             label: {
                                 display: true,
                                 content: 'FORECAST',
-                                // Using 'any' here to bypass strict typing that doesn't officially support xValue/yValue in all versions
-                                // but works at runtime for precise positioning.
                                 xValue: globalForecastStartTs + (maxTs - globalForecastStartTs) / 2,
                                 yValue: '100%',
                                 yAdjust: -15,
@@ -309,7 +307,7 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
 
             <div className="mt-4 pt-4 border-t border-gray-100 max-h-48 overflow-y-auto flex-shrink-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2">
-                    {data.datasets.map((dataset, _i) => {
+                    {data.datasets.map((dataset) => {
                         const isHidden = hiddenDatasets.has(dataset.label || '');
                         const color = dataset.backgroundColor as string;
 

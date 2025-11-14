@@ -1,0 +1,39 @@
+.navbar {
+    @apply w-full bg-gray-800 shadow-sm;
+    border-bottom: 1px solid #374151; /* Darker border for contrast */
+}
+
+.container {
+    @apply flex items-center justify-between h-14;
+    @apply max-w-7xl mx-auto px-6;
+}
+
+.logoContainer {
+    @apply flex items-center gap-3;
+}
+
+.logoImage {
+    @apply h-7;
+    object-fit: contain;
+}
+
+.separator {
+    @apply w-px h-5 bg-gray-600 mx-2;
+}
+
+.productTitle {
+    @apply text-base font-normal text-gray-300 tracking-tight;
+}
+
+.actions {
+    @apply flex items-center gap-2;
+}
+
+.iconButton {
+    @apply p-2 rounded-full text-gray-300;
+    @apply transition-colors duration-150 ease-in-out;
+    @apply hover:text-white hover:bg-gray-700;
+    cursor: pointer;
+    border: none;
+    background: none;
+}
