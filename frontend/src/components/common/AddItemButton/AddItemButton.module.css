@@ -1,14 +1,12 @@
 .button {
-    @apply flex items-center p-2 text-sm font-medium text-gray-500;
-    @apply transition-colors duration-150 ease-in-out;
-    background: none;
-    border: none;
-    cursor: pointer;
-    width: fit-content; /* Don't take full width */
-}
+    @apply flex items-center justify-center w-full;
+    @apply p-3 text-sm font-medium text-gray-500;
+    @apply border-2 border-dashed border-gray-300 rounded-lg;
+    @apply transition-all duration-150 ease-in-out;
+    @apply hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50;
 
-.button:hover {
-    @apply text-teal-500;
+    background: none;
+    cursor: pointer;
 }
 
 .icon {

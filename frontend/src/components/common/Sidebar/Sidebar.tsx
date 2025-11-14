@@ -61,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode }) => {
                 />
                 <NavLink
                     icon={<HiOutlineCollection size={22} />}
-                    label="Strategy Planner"
+                    label="Category Planner"
                     active={viewMode === 'management'}
                 />
                 <NavLink

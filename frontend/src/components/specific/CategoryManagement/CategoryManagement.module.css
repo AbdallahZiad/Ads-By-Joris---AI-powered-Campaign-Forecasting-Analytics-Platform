@@ -1,32 +1,61 @@
-.managementContainer {
-    @apply rounded-lg shadow-sm mb-4 bg-white;
-    border: 1px solid #e5e7eb;
+.pageContainer {
+    @apply flex flex-col;
+    /* Fills the entire height of the scrollable <main> area */
+    min-height: 100%;
+    @apply relative;
 }
 
-.managementContent {
-    @apply p-4;
-    background-color: #FBFBFB;
-    border-top: 1px solid #e5e7eb;
+/* New header section */
+.pageHeader {
+    @apply flex justify-between items-center mb-6;
 }
 
-.footer {
-    @apply flex justify-end items-center p-4;
-    background-color: white;
+/* This is the main content area that holds the settings and categories */
+.content {
+    @apply flex-grow; /* Ensures it pushes the footer down */
+    @apply w-full max-w-7xl mx-auto p-6;
+    /* ▼▼▼ Add padding to the bottom so content isn't obscured by the footer ▼▼▼ */
+    @apply pb-24;
+}
+
+.contextualFooter {
+    /* ▼▼▼ FIX: Switched from 'fixed' to 'sticky' ▼▼▼ */
+    @apply sticky bottom-6 z-30;
+
+    /* ▼▼▼ FIX: Centering logic ▼▼▼ */
+    @apply w-max mx-auto; /* Automatically centers a 'width-of-its-content' block */
+
+    @apply flex items-center p-3 bg-gray-800 rounded-lg shadow-2xl;
+    @apply ring-1 ring-gray-700;
     gap: 0.75rem;
 }
 
+/* Footer buttons (now on a dark background) */
 .actionButton {
     @apply px-4 py-2 rounded-md text-sm font-medium;
-    @apply bg-teal-500 text-white hover:bg-teal-600;
+    @apply bg-teal-500 text-white hover:bg-teal-400;
     border: none;
     cursor: pointer;
     transition: background-color 0.15s ease-in-out;
 }
 
-/* Renamed from .clearButton to be generic */
 .secondaryButton {
     @apply px-4 py-2 rounded-md text-sm font-medium;
-    @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50;
+    @apply bg-gray-700 text-gray-100 hover:bg-gray-600;
+    border: 1px solid #4b5563; /* gray-600 */
     cursor: pointer;
     transition: background-color 0.15s ease-in-out;
+}
+
+/* Primary button style for "Add Category" (in header) */
+.primaryButton {
+    @apply flex items-center px-4 py-2 rounded-md text-sm font-medium;
+    @apply bg-teal-500 text-white hover:bg-teal-600;
+    border: none;
+    cursor: pointer;
+    /* ▼▼▼ FIX: Added transitions for click effect ▼▼▼ */
+    transition-property: background-color, transform;
+    transition-duration: 0.15s;
+    transition-timing-function: ease-in-out;
+    @apply active:scale-95; /* Press-in effect */
 }

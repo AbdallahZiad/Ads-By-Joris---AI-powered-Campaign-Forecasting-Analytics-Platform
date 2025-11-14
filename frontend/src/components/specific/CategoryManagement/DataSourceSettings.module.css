@@ -1,5 +1,7 @@
 .container {
-    @apply bg-white p-4 border border-gray-200 rounded-lg mb-4;
+    /* No longer a white card. It's an inset block */
+    @apply bg-gray-50 rounded-lg p-6 mb-6;
+    border: 1px solid #e5e7eb; /* Subtle border */
 }
 
 .title {
