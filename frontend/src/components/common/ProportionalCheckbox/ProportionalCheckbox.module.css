@@ -1,0 +1,37 @@
+.container {
+    @apply flex items-center w-full p-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer;
+    @apply transition-all duration-200 select-none;
+    height: 46px; /* Standardized height */
+}
+
+.container:hover:not(.disabled) {
+    @apply border-teal-200 bg-teal-50/30;
+}
+
+.container.checked {
+    @apply border-teal-500 bg-teal-50;
+}
+
+.container.disabled {
+    @apply opacity-60 cursor-not-allowed bg-gray-100;
+}
+
+.hiddenCheckbox {
+    display: none;
+}
+
+.customCheckbox {
+    @apply w-5 h-5 rounded border border-gray-300 bg-white mr-3 flex items-center justify-center transition-colors;
+}
+
+.container.checked .customCheckbox {
+    @apply bg-teal-500 border-teal-500;
+}
+
+.label {
+    @apply text-sm font-medium text-gray-600;
+}
+
+.container.checked .label {
+    @apply text-teal-800;
+}

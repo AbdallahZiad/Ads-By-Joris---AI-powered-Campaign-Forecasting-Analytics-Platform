@@ -61,9 +61,9 @@ class Month(str, Enum):
     @classmethod
     def to_int(cls, month_enum: 'Month') -> int:
         """
-                Converts a Month enum value back to its integer (1-12) representation
-                using the pre-computed reverse map.
-                """
+        Converts a Month enum value back to its integer (1-12) representation
+        using the pre-computed reverse map.
+        """
         if month_enum == cls.UNSPECIFIED:
             raise ValueError("Cannot convert UNSPECIFIED month to integer.")
 
@@ -87,8 +87,8 @@ _ENUM_TO_INT_MAP = {v: k for k, v in _INT_TO_ENUM_MAP.items()}
 
 class MonthlySearchVolume(BaseModel):
     """
-        A single data point representing the search volume for a specific month and year.
-        """
+    A single data point representing the search volume for a specific month and year.
+    """
     month: Month = Field(..., description="The month of the search volume data.")
     year: int = Field(..., description="The year of the search volume data.")
     search_volume: int = Field(..., alias="monthly_searches", description="The approximate number of searches for the keyword during this month and year.")
@@ -135,9 +135,11 @@ class UnifiedKeywordResult(BaseModel):
     Handles both 'keyword_metrics' (Historical) and 'keyword_idea_metrics' (Idea) inputs.
     """
     keyword: str = Field(..., description="The keyword phrase.", alias="text")
-    keyword_metrics: KeywordHistoricalMetrics = Field(
-        ...,
-        description="Historical search metrics container."
+
+    # FIX: Made optional to handle cases where API returns a keyword without metrics.
+    keyword_metrics: Optional[KeywordHistoricalMetrics] = Field(
+        None,
+        description="Historical search metrics container. May be None if data is unavailable."
     )
 
     @model_validator(mode='before')

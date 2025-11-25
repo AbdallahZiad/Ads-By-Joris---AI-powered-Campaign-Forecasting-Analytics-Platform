@@ -71,6 +71,9 @@ class ForecastInput(BaseModel):
         """
         Ensures that ALL keywords in google_ads_data have more than 24
         monthly search volumes for the forecast to be reliable.
+
+        This validator gracefully handles missing metrics by skipping the length check
+        for keywords that have no data.
         """
 
         if not self.google_ads_data.results:
@@ -78,6 +81,12 @@ class ForecastInput(BaseModel):
 
         # Iterate over every keyword result to check its data length
         for result in self.google_ads_data.results:
+
+            # --- CRITICAL FIX: Check for None before accessing attributes ---
+            if result.keyword_metrics is None:
+                continue
+                # ---------------------------------------------------------------
+
             data_points = len(result.keyword_metrics.monthly_search_volumes)
 
             if data_points <= self.MIN_DATA_POINTS:

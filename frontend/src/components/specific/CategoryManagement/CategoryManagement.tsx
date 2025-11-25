@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Category as CategoryType, Group as GroupType, SelectOption } from '../../../types';
 import { COUNTRIES_OPTIONS, LANGUAGES_OPTIONS } from '../../../constants';
@@ -7,36 +7,6 @@ import DataSourceSettings from './DataSourceSettings';
 import styles from './CategoryManagement.module.css';
 import { HiPlus } from 'react-icons/hi';
 
-const MOCK_DATA: CategoryType[] = [
-    {
-        id: 'c1',
-        name: 'Apple Ecosystem',
-        groups: [
-            { id: 'g3', name: 'Accessories & Audio', keywords: ['AirPods Pro (2nd Gen)', 'AirPods Max', 'Apple Pencil (2nd Gen)', 'Magic Keyboard', 'AirTag'] },
-            { id: 'g1', name: 'Mac Computers', keywords: ['MacBook Pro 16', 'MacBook Air M2', 'iMac 24-inch', 'Mac Mini M2 Pro', 'Mac Studio'] },
-            { id: 'g2', name: 'Mobile Devices', keywords: ['iPhone 15 Pro Max', 'iPad Air 5th Gen', 'iPad Pro M4', 'iPhone SE (3rd Gen)', 'Apple Watch Series 9'] },
-        ],
-    },
-    {
-        id: 'c2',
-        name: 'Software & Services',
-        groups: [
-            { id: 'g4', name: 'Operating Systems', keywords: ['macOS Sonoma', 'iOS 17', 'iPadOS 17', 'watchOS 10', 'tvOS 17'] },
-            { id: 'g5', name: 'Cloud & Productivity', keywords: ['iCloud+', 'Final Cut Pro', 'Logic Pro', 'Pages', 'Numbers', 'Keynote'] },
-            { id: 'g6', name: 'Entertainment', keywords: ['Apple Music', 'Apple TV+', 'Apple Arcade', 'Apple Fitness+'] },
-        ],
-    },
-    {
-        id: 'c3',
-        name: 'General Electronics',
-        groups: [
-            { id: 'g7', name: 'Gaming Consoles', keywords: ['PlayStation 5 (PS5)', 'Xbox Series X', 'Nintendo Switch OLED'] },
-            { id: 'g8', name: 'Cameras & Optics', keywords: ['Sony Alpha a7 IV', 'Canon EOS R6 Mark II', 'GoPro HERO12 Black', 'Nikon Z8'] },
-            { id: 'g9', name: 'Smart Home Tech', keywords: ['Amazon Echo Dot', 'Google Nest Hub', 'Philips Hue Starter Kit', 'Ring Video Doorbell Pro'] },
-        ],
-    },
-];
-
 interface CategoryManagementProps {
     onRunAnalysis: (
         selection: CategoryType[],
@@ -44,23 +14,46 @@ interface CategoryManagementProps {
         languageId: string | undefined
     ) => void;
     mainContentRef: React.RefObject<HTMLElement | null>;
+    initialImportedCategories?: CategoryType[];
 }
 
 const CategoryManagement: React.FC<CategoryManagementProps> = ({
                                                                    onRunAnalysis,
                                                                    mainContentRef,
+                                                                   initialImportedCategories
                                                                }) => {
-    const [categories, setCategories] = useState<CategoryType[]>(MOCK_DATA);
+    const [categories, setCategories] = useState<CategoryType[]>([]);
+
+    // Selection State
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
     const [selectedKeywordsByGroup, setSelectedKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
 
+    // Settings State
     const [country, setCountry] = useState<SelectOption | null>(
         COUNTRIES_OPTIONS.find(c => c.id === '2840') || null
     );
     const [language, setLanguage] = useState<SelectOption | null>(
         LANGUAGES_OPTIONS.find(l => l.id === '1000') || null
     );
+
+    // --- FUNNEL LOGIC: Overwrite local state when scanner data arrives ---
+    useEffect(() => {
+        if (initialImportedCategories && initialImportedCategories.length > 0) {
+            // 1. Overwrite: Replace all existing categories with the new scan results
+            setCategories(initialImportedCategories);
+
+            // 2. Clean Slate: Wipe all previous selections to prevent stale references
+            setSelectedCategoryIds(new Set());
+            setSelectedGroupIds(new Set());
+            setSelectedKeywordsByGroup(new Map());
+
+            // Optional: Scroll to top to show new data
+            if (mainContentRef.current) {
+                mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+    }, [initialImportedCategories, mainContentRef]);
 
     const generateId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
@@ -198,7 +191,19 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         const category = categories.find(c => c.id === categoryId);
         if (!category) return;
         setCategories(prev => prev.filter(c => c.id !== categoryId));
-        // ... (selection cleanup)
+
+        // Cleanup selection
+        const newSelectedCatIds = new Set(selectedCategoryIds);
+        newSelectedCatIds.delete(categoryId);
+        setSelectedCategoryIds(newSelectedCatIds);
+        const newSelectedGroupIds = new Set(selectedGroupIds);
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        category.groups.forEach(g => {
+            newSelectedGroupIds.delete(g.id);
+            newSelectedKeywordsMap.delete(g.id);
+        });
+        setSelectedGroupIds(newSelectedGroupIds);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
     const handleGroupNameSave = (categoryId: string, groupId: string, newName: string) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, name: newName } : grp) } : cat));
@@ -210,11 +215,22 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                 ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) }
                 : cat
         ));
-        // ... (selection cleanup)
+
+        // Cleanup selection
+        const newSelectedGroupIds = new Set(selectedGroupIds);
+        newSelectedGroupIds.delete(groupId);
+        setSelectedGroupIds(newSelectedGroupIds);
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        newSelectedKeywordsMap.delete(groupId);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
     const handleKeywordSave = (categoryId: string, groupId: string, newKeywords: string[]) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, keywords: newKeywords } : grp) } : cat));
-        // ... (selection cleanup)
+
+        // Cleanup selection for modified group to avoid stale keyword references
+        const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
+        newSelectedKeywordsMap.delete(groupId);
+        setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
 
     // --- ANALYSIS/ACTION LOGIC ---
@@ -286,7 +302,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
 
     return (
         <div className={styles.pageContainer}>
-            {/* Main content area */}
             <div className={styles.content}>
 
                 <div className={styles.pageHeader}>
@@ -310,7 +325,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                     <CategoryComponent
                         key={category.id}
                         category={category}
-                        initialOpen={category.id === 'c1'}
+                        initialOpen={categories.length === 1} // Auto open if it's the only one
                         selected={selectedCategoryIds.has(category.id)}
                         onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
                         selectedGroupIds={selectedGroupIds}
@@ -332,6 +347,12 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                         onKeywordCopy={() => {}}
                     />
                 ))}
+
+                {categories.length === 0 && (
+                    <div className="flex flex-col items-center justify-center p-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+                        <p>No categories yet. Use the Website Scanner or add one manually.</p>
+                    </div>
+                )}
 
                 {/* Spacer div to push content above footer */}
                 <div className={styles.contentSpacer} />

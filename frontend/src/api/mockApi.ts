@@ -1,5 +1,5 @@
-import { UnifiedKeywordResult, KeywordForecast } from '../types';
-import { MOCK_HISTORY_DB, MOCK_FORECAST_DB } from './mockData';
+import {UnifiedKeywordResult, KeywordForecast, ScannerConfig, ScannerResponse} from '../types';
+import {MOCK_HISTORY_DB, MOCK_FORECAST_DB, MOCK_SCANNER_RESPONSE} from './mockData';
 import { normalize } from '../utils/text'; // Imported shared normalizer
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -23,5 +23,12 @@ export const mockApi = {
         return MOCK_FORECAST_DB.forecasts.filter(item =>
             requestedSet.has(normalize(item.keyword))
         );
+    },
+
+    scanWebsite: async (config: ScannerConfig): Promise<ScannerResponse> => {
+        console.log("API [Scanner]: Starting scan with config:", config);
+        // Simulate long processing time (e.g., 4 seconds) for effect
+        await delay(4000);
+        return MOCK_SCANNER_RESPONSE;
     }
 };

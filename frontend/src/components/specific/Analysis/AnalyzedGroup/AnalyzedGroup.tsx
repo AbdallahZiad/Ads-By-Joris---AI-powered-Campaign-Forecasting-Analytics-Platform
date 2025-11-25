@@ -13,7 +13,7 @@ interface Props {
 
 const AnalyzedGroup: React.FC<Props> = ({ group, chartSelection, onChartSelectionChange }) => {
 
-    // Helper to determine if a keyword *can* be selected
+    // ▼▼▼ ROBUSTNESS: Only selectable if at least one data source exists ▼▼▼
     const isSelectable = (k: AnalyzedKeyword) => !(k.history === null && k.forecast === null);
 
     // Get only the keywords that actually have data
@@ -42,16 +42,8 @@ const AnalyzedGroup: React.FC<Props> = ({ group, chartSelection, onChartSelectio
             contentClassName={styles.groupContent}
             selectable={true}
             selected={isFullySelected}
-            onSelect={!isGroupDisabled ? handleGroupChartToggle : undefined} // Disable callback if empty
+            onSelect={!isGroupDisabled ? handleGroupChartToggle : undefined}
         >
-            {/* Force the collapsible checkbox to be visually disabled if needed.
-          We might need to update Collapsible to officially support 'disabled' prop later,
-          but passing undefined onSelect usually works for read-only.
-          For now, let's trust it handles no-op if we don't pass a handler,
-          or we could add a 'disabled' prop to Collapsible.
-          Let's stick to standard behavior: if it has no selectable keywords, it just won't ever be 'fully selected'.
-      */}
-
             <div className="mt-2">
                 {group.keywords.length > 0 && (
                     <div className={styles.headerRow}>

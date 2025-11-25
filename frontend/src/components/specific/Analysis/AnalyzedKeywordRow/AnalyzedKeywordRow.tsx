@@ -1,7 +1,13 @@
 import React from 'react';
 import { AnalyzedKeyword } from '../../../../types';
 import styles from './AnalyzedKeywordRow.module.css';
-import {formatCurrency, formatMultiplier, formatNumber, renderStat} from "../../../../utils/format.tsx";
+import {
+    formatCompetition, // ▼▼▼ Imported
+    formatCurrency,
+    formatMultiplier,
+    formatNumber,
+    renderStat
+} from "../../../../utils/format.tsx";
 
 interface Props {
     data: AnalyzedKeyword;
@@ -20,15 +26,18 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
     // AND both returned null (no data found).
     const isDisabled = history === null && forecast === null;
 
+    // Visually force unchecked if disabled, regardless of selection state
+    const isChecked = isSelectedForChart && !isDisabled;
+
     return (
         <div className={`${styles.rowContainer} ${isDisabled ? styles.disabled : ''}`}>
             <input
                 type="checkbox"
                 className={styles.checkbox}
-                checked={isSelectedForChart}
-                disabled={isDisabled} // ▼▼▼ Disable input if no data ▼▼▼
+                checked={isChecked}
+                disabled={isDisabled}
                 onChange={(e) => onToggleChart(text, e.target.checked)}
-                title={isDisabled ? "No data available for charting" : "Show on chart"}
+                title={isDisabled ? "No data available" : "Show on chart"}
             />
 
             <div className={styles.keywordText} title={text}>
@@ -39,8 +48,9 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
             <div className={styles.stat} title="Average Monthly Searches">
                 {renderStat(history?.avg_monthly_searches, history === undefined, formatNumber)}
             </div>
+            {/* ▼▼▼ APPLIED FORMATTER ▼▼▼ */}
             <div className={styles.stat} title="Competition Level">
-                {renderStat(history?.competition, history === undefined)}
+                {renderStat(history?.competition, history === undefined, formatCompetition)}
             </div>
             <div className={styles.stat} title="Average CPC">
                 {renderStat(history?.average_cpc_micros, history === undefined, formatCurrency)}

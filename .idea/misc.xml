@@ -4,7 +4,4 @@
     <option name="sdkName" value="Remote Python 3.10.19 Docker Compose (backend)" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.10 virtualenv at E:\Freelancing\Joris\Ads By Joris - AI-powered Campaign Forecasting &amp; Analytics Platform\backend\.venv" project-jdk-type="Python SDK" />
-  <component name="PyPackaging">
-    <option name="earlyReleasesAsUpgrades" value="true" />
-  </component>
 </project>

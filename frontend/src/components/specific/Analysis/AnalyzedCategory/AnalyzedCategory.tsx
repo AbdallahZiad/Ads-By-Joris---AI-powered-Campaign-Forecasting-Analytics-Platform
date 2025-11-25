@@ -12,6 +12,7 @@ interface Props {
 
 const AnalyzedCategory: React.FC<Props> = ({ category, chartSelection, onChartSelectionChange }) => {
 
+    // ▼▼▼ ROBUSTNESS: Filter for valid keywords at category level ▼▼▼
     const isSelectable = (k: AnalyzedKeyword) => !(k.history === null && k.forecast === null);
 
     // Get ALL selectable keywords across ALL groups in this category

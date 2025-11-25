@@ -1,0 +1,16 @@
+
+.statsPanel {
+    @apply bg-white rounded-xl p-6 mb-8 border border-gray-100 shadow-sm text-sm text-gray-600 grid grid-cols-2 md:grid-cols-4 gap-8;
+}
+
+.statItem {
+    @apply flex flex-col items-center justify-center text-center;
+}
+
+.statLabel {
+    @apply text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-1;
+}
+
+.statValue {
+    @apply text-2xl text-gray-800 font-bold;
+}

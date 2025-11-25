@@ -1,0 +1,26 @@
+.heroSection {
+    @apply text-center mb-10 mt-4;
+}
+
+.title {
+    @apply text-3xl font-bold text-gray-900 mb-6 tracking-tight;
+}
+
+.featurePills {
+    @apply flex items-center justify-center gap-3 flex-wrap;
+    @apply text-sm font-medium text-gray-500;
+}
+
+.pill {
+    @apply flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-gray-100 shadow-sm;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pill:hover {
+    transform: translateY(-1px);
+    @apply shadow-md border-teal-50 text-teal-700;
+}
+
+.separator {
+    @apply w-1 h-1 rounded-full bg-gray-300;
+}

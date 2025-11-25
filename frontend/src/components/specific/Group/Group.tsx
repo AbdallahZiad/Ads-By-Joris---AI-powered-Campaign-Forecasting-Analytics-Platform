@@ -13,13 +13,12 @@ interface GroupProps {
     onNameSave: (newName: string) => void;
     onEnrich: () => void;
     onRunAnalysis: () => void;
-    // ▼▼▼ NEW PROPS ▼▼▼
     selectedKeywords: Set<string>;
     onKeywordSelect: (keyword: string, isSelected: boolean) => void;
-    // ▲▲▲ NEW PROPS ▲▲▲
     onKeywordSave: (newKeywords: string[]) => void;
     onKeywordCopy: (keywordsText: string) => void;
     onKeywordEdit?: () => void;
+    readOnly?: boolean; // ▼▼▼ NEW PROP ▼▼▼
 }
 
 const Group: React.FC<GroupProps> = ({
@@ -36,28 +35,35 @@ const Group: React.FC<GroupProps> = ({
                                          onKeywordSave,
                                          onKeywordCopy,
                                          onKeywordEdit,
+                                         readOnly = false,
                                      }) => {
+
+    // ▼▼▼ Read-Only Logic Configuration ▼▼▼
+    const collapsibleActions = readOnly ? null : (
+        <>
+            <button className={styles.actionButton} onClick={onEnrich}>
+                Enrich
+            </button>
+            <button className={styles.actionButton} onClick={onRunAnalysis}>
+                Run Analysis
+            </button>
+        </>
+    );
+
     return (
         <Collapsible
             title={group.name}
             initialOpen={initialOpen}
-            onTitleSave={onNameSave}
-            onRemove={onRemove}
+            // If readOnly, disable title editing and removal
+            onTitleSave={readOnly ? undefined : onNameSave}
+            onRemove={readOnly ? undefined : onRemove}
             containerClassName={styles.groupContainer}
             contentClassName={styles.groupContent}
-            selectable={true}
+            // If readOnly, disable selection
+            selectable={!readOnly}
             selected={selected}
             onSelect={onSelect}
-            headerActions={
-                <>
-                    <button className={styles.actionButton} onClick={onEnrich}>
-                        Enrich
-                    </button>
-                    <button className={styles.actionButton} onClick={onRunAnalysis}>
-                        Run Analysis
-                    </button>
-                </>
-            }
+            headerActions={collapsibleActions}
         >
             <KeywordList
                 keywords={group.keywords}
@@ -65,10 +71,10 @@ const Group: React.FC<GroupProps> = ({
                 onCopy={onKeywordCopy}
                 onEdit={onKeywordEdit}
                 showBorder={false}
-                // ▼▼▼ Pass selection props down ▼▼▼
                 selectable={true}
                 selectedKeywords={selectedKeywords}
                 onKeywordSelect={onKeywordSelect}
+                readOnly={readOnly} // Pass it down
             />
         </Collapsible>
     );

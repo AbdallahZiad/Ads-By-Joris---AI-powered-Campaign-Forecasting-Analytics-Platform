@@ -32,7 +32,7 @@ export interface KeywordHistoricalMetrics {
 
 export interface UnifiedKeywordResult {
     text: string;
-    keyword_metrics: KeywordHistoricalMetrics;
+    keyword_metrics: KeywordHistoricalMetrics | null;
 }
 
 export interface ForecastPoint {
@@ -85,4 +85,55 @@ export interface AnalyzedCategory {
 export interface SelectOption {
     id: string;
     name: string;
+}
+
+export interface ScannerConfig {
+    start_url: string;
+    max_pages: number;
+    max_depth: number;
+    stay_in_domain: boolean;
+    headlines_only: boolean;
+    min_request_delay: number;
+}
+
+export interface ScannedGroupRaw {
+    group_name: string;
+    keywords: string[];
+}
+
+export interface ScannedCategoryRaw {
+    category_name: string;
+    groups: ScannedGroupRaw[];
+}
+
+export interface CrawlStats {
+    pages_crawled: number;
+    pages_failed: number;
+    total_links_found: number;
+    crawl_duration_seconds: number;
+    average_page_size_bytes: number;
+    robots_txt_found: boolean;
+    max_depth_reached: number;
+}
+
+export interface PhaseMetrics {
+    time_taken_seconds: number;
+    tokens_used: number;
+    api_calls: number;
+}
+
+export interface LlmMetrics {
+    total_tokens: number;
+    phase_metrics: {
+        keyword_extraction: PhaseMetrics;
+        category_generation: PhaseMetrics;
+        keyword_categorization: PhaseMetrics;
+        keyword_grouping: PhaseMetrics;
+    }
+}
+
+export interface ScannerResponse {
+    structured_data: ScannedCategoryRaw[];
+    crawl_stats: CrawlStats;
+    llm_metrics: LlmMetrics;
 }

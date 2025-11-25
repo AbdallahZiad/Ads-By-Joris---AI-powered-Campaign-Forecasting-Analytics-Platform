@@ -58,6 +58,7 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
             }
         });
 
+        // Determine forecast start line
         selectedKeywords.forEach(kw => {
             if (kw.forecast?.forecast_series) {
                 kw.forecast.forecast_series.forEach(pt => {
@@ -80,6 +81,7 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
                 }
             };
 
+            // ▼▼▼ ROBUSTNESS: Safe access with ?. because history might be null ▼▼▼
             kw.history?.monthly_search_volumes.forEach(pt => {
                 const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
                 if (ts <= globalForecastStartTs) addPoint(ts, pt.monthly_searches);
@@ -87,6 +89,7 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
 
             kw.forecast?.forecast_series.forEach(pt => {
                 const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
+                // Prevent duplicate point if history already provided it
                 if (ts === globalForecastStartTs && pointMap.has(ts)) return;
                 addPoint(ts, pt.search_volume_forecast);
             });
@@ -116,13 +119,16 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
             };
         });
 
+        // Filter out datasets that ended up with 0 points (e.g. null history AND null forecast)
+        const validDatasets = datasets.filter(ds => ds.data.length > 0);
+
         const chartOptions: ChartOptions<'line'> = {
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
-                mode: 'nearest',// Find the single nearest point
-                axis: 'xy', // Consider both X and Y distance (better for overlapping lines)
-                intersect: true, // Only trigger when mouse actually 'hits' the point (uses pointHitRadius)
+                mode: 'nearest',
+                axis: 'xy',
+                intersect: true,
             },
             animation: { duration: 800 },
             layout: {
@@ -215,9 +221,9 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
         };
 
         return {
-            data: { datasets },
+            data: { datasets: validDatasets }, // Use filtered datasets
             options: chartOptions,
-            hasData: datasets.length > 0,
+            hasData: validDatasets.length > 0,
             allKeywordLabels: uniqueKeywordLabels,
         };
 

@@ -12,6 +12,7 @@ export const renderStat = (
 };
 
 export const formatNumber = (num: number) => new Intl.NumberFormat('en-US', {notation: 'compact'}).format(num);
+
 export const formatCurrency = (micros: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -28,4 +29,10 @@ export const formatMultiplier = (val: number) => {
             {isPositive ? '+' : ''}{percentage.toFixed(1)}%
     </span>
     );
+};
+
+// ▼▼▼ NEW FORMATTER ▼▼▼
+export const formatCompetition = (val: string) => {
+    if (val === 'UNSPECIFIED' || val === 'UNKNOWN') return '-';
+    return val;
 };

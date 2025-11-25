@@ -26,6 +26,7 @@ interface CategoryProps {
     onKeywordEdit?: (groupId: string) => void;
     selectedKeywordsByGroup: Map<string, Set<string>>;
     onKeywordSelect: (groupId: string, keyword: string, isSelected: boolean) => void;
+    readOnly?: boolean; // ▼▼▼ NEW PROP ▼▼▼
 }
 
 const Category: React.FC<CategoryProps> = ({
@@ -49,28 +50,35 @@ const Category: React.FC<CategoryProps> = ({
                                                onKeywordEdit,
                                                selectedKeywordsByGroup,
                                                onKeywordSelect,
+                                               readOnly = false,
                                            }) => {
+
+    // ▼▼▼ Read-Only Logic Configuration ▼▼▼
+    const collapsibleActions = readOnly ? null : (
+        <>
+            <button className={styles.actionButton} onClick={onEnrich}>
+                Enrich
+            </button>
+            <button className={styles.actionButton} onClick={onRunAnalysis}>
+                Run Analysis
+            </button>
+        </>
+    );
+
     return (
         <Collapsible
             title={category.name}
             initialOpen={initialOpen}
-            onTitleSave={onNameSave}
-            onRemove={onRemove}
+            // If readOnly, disable title editing and removal
+            onTitleSave={readOnly ? undefined : onNameSave}
+            onRemove={readOnly ? undefined : onRemove}
             containerClassName={styles.categoryContainer}
             contentClassName={styles.categoryContent}
-            selectable={true}
+            // If readOnly, disable selection
+            selectable={!readOnly}
             selected={selected}
             onSelect={onSelect}
-            headerActions={
-                <>
-                    <button className={styles.actionButton} onClick={onEnrich}>
-                        Enrich
-                    </button>
-                    <button className={styles.actionButton} onClick={onRunAnalysis}>
-                        Run Analysis
-                    </button>
-                </>
-            }
+            headerActions={collapsibleActions}
         >
             {category.groups.map((group) => (
                 <Group
@@ -90,14 +98,17 @@ const Category: React.FC<CategoryProps> = ({
                     onKeywordSave={(newKeywords) => onKeywordSave(group.id, newKeywords)}
                     onKeywordCopy={(keywordsText) => onKeywordCopy(group.id, keywordsText)}
                     onKeywordEdit={() => onKeywordEdit?.(group.id)}
+                    readOnly={readOnly} // Pass it down
                 />
             ))}
 
-            <AddItemButton
-                label="Add Group"
-                onClick={() => onGroupAdd(category.id)}
-                className="mt-2" // Add a little top margin for breathing room
-            />
+            {!readOnly && (
+                <AddItemButton
+                    label="Add Group"
+                    onClick={() => onGroupAdd(category.id)}
+                    className="mt-2"
+                />
+            )}
         </Collapsible>
     );
 };

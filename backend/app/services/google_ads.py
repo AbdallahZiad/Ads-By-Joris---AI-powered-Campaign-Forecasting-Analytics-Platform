@@ -262,6 +262,7 @@ class GoogleAdsService:
         )
 
         response_data = self._proto_to_dict(raw_response)
+        # With optional metrics in schema, this validation will now succeed even if some data is missing
         response: GoogleAdsKeywordResponse = GoogleAdsKeywordResponse.model_validate(response_data)
 
         return response

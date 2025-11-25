@@ -1,0 +1,23 @@
+.container {
+    @apply w-full max-w-7xl mx-auto p-6 flex flex-col items-center;
+}
+
+.resultsHeader {
+    @apply flex justify-between items-center mb-6 mt-8 pb-4 border-b border-gray-100;
+}
+
+.statsButton {
+    @apply text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-teal-600 cursor-pointer transition-colors border border-gray-200 rounded-full px-3 py-1 hover:border-teal-200;
+}
+
+.acceptActions {
+    @apply flex justify-end gap-4 mt-8 pt-8 border-t border-gray-200;
+}
+
+.cancelButton {
+    @apply px-6 py-3 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-800 transition-colors;
+}
+
+.acceptButton {
+    @apply px-6 py-3 text-sm font-bold text-white bg-teal-600 rounded-lg shadow-md hover:bg-teal-700 hover:shadow-lg transition-all flex items-center;
+}

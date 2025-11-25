@@ -244,6 +244,11 @@ class KeywordForecastingService:
             keyword = result.keyword
             metrics = result.keyword_metrics
 
+            # CRITICAL FIX: Gracefully skip keywords with no data
+            if metrics is None:
+                print(f"Skipping keyword '{keyword}': No historical metrics available.")
+                continue
+
             if metrics.avg_monthly_searches < self._MIN_SEARCH_VOLUME_THRESHOLD:
                 print(
                     f"Skipping keyword '{keyword}': Avg search volume ({metrics.avg_monthly_searches}) below threshold."

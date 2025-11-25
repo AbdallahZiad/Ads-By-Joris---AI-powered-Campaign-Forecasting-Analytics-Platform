@@ -23,7 +23,6 @@ export const useKeywordAnalysis = (
 
         if (keywordList.length === 0) return;
 
-        // Log to show the settings have arrived (we will use these in API calls later)
         console.log("HOOK: Fetching data with settings:", { countryId, languageId });
 
         setIsLoading(prev => ({ ...prev, history: true }));
@@ -41,7 +40,6 @@ export const useKeywordAnalysis = (
             setForecastData(newMap);
             setIsLoading(prev => ({ ...prev, forecast: false }));
         });
-        // Add countryId and languageId to dependency array
     }, [selection, countryId, languageId]);
 
     // The "Inflator"
@@ -54,7 +52,16 @@ export const useKeywordAnalysis = (
                 name: grp.name,
                 keywords: grp.keywords.map(k => {
                     const kNorm = normalize(k);
-                    const historyEntry = isLoading.history ? undefined : (historyData.get(kNorm)?.keyword_metrics || null);
+
+                    // ▼▼▼ ROBUST HANDLING ▼▼▼
+                    // 1. If loading, undefined.
+                    // 2. If map has entry, use entry.keyword_metrics (which might be null).
+                    // 3. If map has no entry, use null.
+                    const historyResult = historyData.get(kNorm);
+                    const historyEntry = isLoading.history
+                        ? undefined
+                        : (historyResult ? historyResult.keyword_metrics : null);
+
                     const forecastEntry = isLoading.forecast ? undefined : (forecastData.get(kNorm) || null);
 
                     return {

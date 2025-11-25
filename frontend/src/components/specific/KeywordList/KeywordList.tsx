@@ -12,6 +12,7 @@ interface KeywordListProps {
     selectable?: boolean;
     selectedKeywords?: Set<string>;
     onKeywordSelect?: (keyword: string, isSelected: boolean) => void;
+    readOnly?: boolean; // ▼▼▼ NEW PROP ▼▼▼
 }
 
 const KeywordList: React.FC<KeywordListProps> = ({
@@ -24,6 +25,7 @@ const KeywordList: React.FC<KeywordListProps> = ({
                                                      selectable = false,
                                                      selectedKeywords = new Set(),
                                                      onKeywordSelect,
+                                                     readOnly = false,
                                                  }) => {
     const [isEditing, setIsEditing] = useState(initialEditMode);
     const [currentKeywordsText, setCurrentKeywordsText] = useState('');
@@ -43,6 +45,7 @@ const KeywordList: React.FC<KeywordListProps> = ({
     }, [isEditing]);
 
     const handleEditClick = () => {
+        if (readOnly) return;
         setIsEditing(true);
         onEdit?.();
     };
@@ -88,14 +91,18 @@ const KeywordList: React.FC<KeywordListProps> = ({
                             <span className="sr-only">Copy</span>
                         </button>
                     ) : null}
-                    <button
-                        className={styles.actionButton}
-                        onClick={isEditing ? handleSaveClick : handleEditClick}
-                        aria-label={isEditing ? "Save changes" : "Edit keywords"}
-                    >
-                        {isEditing ? <HiOutlineCheck size={20} /> : <HiOutlinePencil size={20} />}
-                        <span className="sr-only">{isEditing ? "Save" : "Edit"}</span>
-                    </button>
+
+                    {/* ▼▼▼ Hide Edit button in Read-Only mode ▼▼▼ */}
+                    {!readOnly && (
+                        <button
+                            className={styles.actionButton}
+                            onClick={isEditing ? handleSaveClick : handleEditClick}
+                            aria-label={isEditing ? "Save changes" : "Edit keywords"}
+                        >
+                            {isEditing ? <HiOutlineCheck size={20} /> : <HiOutlinePencil size={20} />}
+                            <span className="sr-only">{isEditing ? "Save" : "Edit"}</span>
+                        </button>
+                    )}
                 </div>
 
                 {isEditing ? (
@@ -109,39 +116,37 @@ const KeywordList: React.FC<KeywordListProps> = ({
                         placeholder="Enter keywords, one per line..."
                     />
                 ) : (
-                    // ▼▼▼ ADDED onDoubleClick HERE ▼▼▼
                     <div
                         className={`${styles.textBlock} ${styles.keywordListContainer}`}
-                        onDoubleClick={handleEditClick}
-                        title="Double-click to edit"
+                        // ▼▼▼ Disable double-click in Read-Only mode ▼▼▼
+                        onDoubleClick={!readOnly ? handleEditClick : undefined}
+                        title={!readOnly ? "Double-click to edit" : undefined}
+                        style={{ cursor: readOnly ? 'default' : 'pointer' }}
                     >
                         {keywords.length > 0 ? (
                             keywords.map((keyword, index) => (
-                                // Stop propagation on individual items if needed,
-                                // but usually letting it bubble up to the container is fine for double-click.
                                 <div key={index} className={styles.keywordItem}>
-                                    {selectable && (
+                                    {/* ▼▼▼ Force hide checkboxes in Read-Only mode ▼▼▼ */}
+                                    {selectable && !readOnly && (
                                         <input
                                             type="checkbox"
                                             className={styles.keywordCheckbox}
                                             checked={selectedKeywords.has(keyword)}
-                                            // Stop propagation here so fast clicking checkboxes doesn't trigger edit
                                             onClick={(e) => e.stopPropagation()}
                                             onChange={(e) => onKeywordSelect?.(keyword, e.target.checked)}
                                         />
                                     )}
-                                    <label className={styles.keywordLabel}>
+                                    <label className={styles.keywordLabel} style={{ cursor: readOnly ? 'text' : 'pointer' }}>
                                         {keyword}
                                     </label>
                                 </div>
                             ))
                         ) : (
                             <span className={styles.placeholder}>
-                No keywords. Double-click to add.
-              </span>
+                                {readOnly ? "No keywords." : "No keywords. Double-click to add."}
+                            </span>
                         )}
                     </div>
-                    // ▲▲▲ ADDED onDoubleClick HERE ▲▲▲
                 )}
             </div>
         </div>
