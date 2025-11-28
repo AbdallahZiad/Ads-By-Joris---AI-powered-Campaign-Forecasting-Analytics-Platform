@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Category, AnalyzedCategory, UnifiedKeywordResult, KeywordForecast, AnalyzedKeyword } from '../types';
 import { mockApi } from '../api/mockApi';
 import { normalize } from '../utils/text';
+import { MetricsCache } from '../utils/metricsCache';
 
 export const useKeywordAnalysis = (
     selection: Category[],
@@ -23,16 +24,43 @@ export const useKeywordAnalysis = (
 
         if (keywordList.length === 0) return;
 
-        console.log("HOOK: Fetching data with settings:", { countryId, languageId });
+        console.log("HOOK: Checking cache and fetching data...", { countryId, languageId });
 
+        // --- 1. HISTORY (Check Cache First) ---
         setIsLoading(prev => ({ ...prev, history: true }));
-        mockApi.fetchHistory(keywordList).then(results => {
-            const newMap = new Map<string, UnifiedKeywordResult>();
-            results.forEach(r => newMap.set(normalize(r.text), r));
-            setHistoryData(newMap);
-            setIsLoading(prev => ({ ...prev, history: false }));
+
+        // Identify what we already have vs what we need to fetch
+        const missingForHistory = MetricsCache.getMissingKeywords(keywordList);
+
+        // Initialize map with cached data immediately
+        const initialHistoryMap = new Map<string, UnifiedKeywordResult>();
+        keywordList.forEach(k => {
+            const cached = MetricsCache.get(k);
+            if (cached) {
+                initialHistoryMap.set(normalize(k), { text: k, keyword_metrics: cached });
+            }
         });
 
+        if (missingForHistory.length > 0) {
+            // Fetch only missing
+            mockApi.fetchHistory(missingForHistory).then(results => {
+                // Cache the new results
+                MetricsCache.cacheResults(results);
+
+                // Combine cached + new results
+                const finalMap = new Map(initialHistoryMap);
+                results.forEach(r => finalMap.set(normalize(r.text), r));
+
+                setHistoryData(finalMap);
+                setIsLoading(prev => ({ ...prev, history: false }));
+            });
+        } else {
+            // Everything was cached!
+            setHistoryData(initialHistoryMap);
+            setIsLoading(prev => ({ ...prev, history: false }));
+        }
+
+        // --- 2. FORECAST (Always fetch for now, or implement similar cache if needed) ---
         setIsLoading(prev => ({ ...prev, forecast: true }));
         mockApi.fetchForecast(keywordList).then(results => {
             const newMap = new Map<string, KeywordForecast>();
@@ -40,6 +68,7 @@ export const useKeywordAnalysis = (
             setForecastData(newMap);
             setIsLoading(prev => ({ ...prev, forecast: false }));
         });
+
     }, [selection, countryId, languageId]);
 
     // The "Inflator"
@@ -53,10 +82,6 @@ export const useKeywordAnalysis = (
                 keywords: grp.keywords.map(k => {
                     const kNorm = normalize(k);
 
-                    // ▼▼▼ ROBUST HANDLING ▼▼▼
-                    // 1. If loading, undefined.
-                    // 2. If map has entry, use entry.keyword_metrics (which might be null).
-                    // 3. If map has no entry, use null.
                     const historyResult = historyData.get(kNorm);
                     const historyEntry = isLoading.history
                         ? undefined

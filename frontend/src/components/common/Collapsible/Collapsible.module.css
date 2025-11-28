@@ -41,30 +41,67 @@
     transform: rotate(180deg);
 }
 
-/* ▼▼▼ FIX: Changed from '1 1 auto' to '0 1 auto' so it doesn't grow */
 .labelWrapper {
     flex: 0 1 auto;
     min-width: 0;
 }
-/* ▲▲▲ FIX ▲▲▲ */
 
 .spacer {
     flex-grow: 1;
     align-self: stretch;
 }
 
+/* Container for Status + Actions */
+.interactiveArea {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* Status Indicator (The Loading Spinner) */
+.statusIndicator {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: transform 0.3s ease-in-out;
+    margin-left: 1rem;
+}
+
+/* Actions (Enrich / Run Analysis Buttons) */
 .headerActions {
     display: flex;
     align-items: center;
-    margin-left: 1rem;
     flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 0.15s ease-in-out;
     gap: 0.5rem;
+
+    /* Default State (Hidden) */
+    max-width: 0;
+    opacity: 0;
+    margin-left: 0;
+    overflow: hidden;
+    white-space: nowrap;
+
+    /* EXIT TRANSITION (When mouse leaves) */
+    /* 1. Fade out opacity quickly (0.2s) */
+    /* 2. Then collapse width (0.3s) after a slight delay */
+    transition:
+            opacity 0.2s ease-in-out,
+            max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s,
+            margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s;
 }
 
+/* ENTER TRANSITION (When mouse hovers) */
 .header:hover .headerActions {
+    max-width: 300px; /* Expands to fit content */
     opacity: 1;
+    margin-left: 1rem; /* Adds gap between status and buttons */
+
+    /* 1. Expand width immediately (pushes loading icon left) */
+    /* 2. Fade in opacity after width starts opening (0.1s delay) */
+    transition:
+            max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+            margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+            opacity 0.2s ease-in-out 0.1s;
 }
 
 .checkboxContainer {

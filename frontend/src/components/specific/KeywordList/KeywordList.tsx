@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HiOutlinePencil, HiOutlineCheck, HiOutlineClipboardCopy } from 'react-icons/hi';
+import { HiOutlinePencil, HiOutlineCheck, HiOutlineClipboardCopy, HiRefresh } from 'react-icons/hi';
 import styles from './KeywordList.module.css';
 
 interface KeywordListProps {
@@ -12,7 +12,10 @@ interface KeywordListProps {
     selectable?: boolean;
     selectedKeywords?: Set<string>;
     onKeywordSelect?: (keyword: string, isSelected: boolean) => void;
-    readOnly?: boolean; // ▼▼▼ NEW PROP ▼▼▼
+    readOnly?: boolean;
+    // ▼▼▼ NEW PROPS ▼▼▼
+    isEnriching?: boolean;
+    newKeywords?: Set<string>;
 }
 
 const KeywordList: React.FC<KeywordListProps> = ({
@@ -26,6 +29,8 @@ const KeywordList: React.FC<KeywordListProps> = ({
                                                      selectedKeywords = new Set(),
                                                      onKeywordSelect,
                                                      readOnly = false,
+                                                     isEnriching = false,
+                                                     newKeywords = new Set(),
                                                  }) => {
     const [isEditing, setIsEditing] = useState(initialEditMode);
     const [currentKeywordsText, setCurrentKeywordsText] = useState('');
@@ -45,7 +50,7 @@ const KeywordList: React.FC<KeywordListProps> = ({
     }, [isEditing]);
 
     const handleEditClick = () => {
-        if (readOnly) return;
+        if (readOnly || isEnriching) return;
         setIsEditing(true);
         onEdit?.();
     };
@@ -78,6 +83,16 @@ const KeywordList: React.FC<KeywordListProps> = ({
 
     return (
         <div className={`${styles.container} ${showBorder ? styles.withBorder : ''}`}>
+            {/* ▼▼▼ ENRICHMENT LOADING OVERLAY ▼▼▼ */}
+            {isEnriching && (
+                <div className={styles.loadingOverlay}>
+                    <div className={styles.loadingContent}>
+                        <HiRefresh className="animate-spin text-teal-500" size={24} />
+                        <span className="text-sm font-medium text-teal-700">Enriching...</span>
+                    </div>
+                </div>
+            )}
+
             <div className={styles.content}>
                 <div className={styles.actions}>
                     {!isEditing ? (
@@ -92,11 +107,11 @@ const KeywordList: React.FC<KeywordListProps> = ({
                         </button>
                     ) : null}
 
-                    {/* ▼▼▼ Hide Edit button in Read-Only mode ▼▼▼ */}
                     {!readOnly && (
                         <button
                             className={styles.actionButton}
                             onClick={isEditing ? handleSaveClick : handleEditClick}
+                            disabled={isEnriching}
                             aria-label={isEditing ? "Save changes" : "Edit keywords"}
                         >
                             {isEditing ? <HiOutlineCheck size={20} /> : <HiOutlinePencil size={20} />}
@@ -118,29 +133,37 @@ const KeywordList: React.FC<KeywordListProps> = ({
                 ) : (
                     <div
                         className={`${styles.textBlock} ${styles.keywordListContainer}`}
-                        // ▼▼▼ Disable double-click in Read-Only mode ▼▼▼
-                        onDoubleClick={!readOnly ? handleEditClick : undefined}
+                        onDoubleClick={!readOnly && !isEnriching ? handleEditClick : undefined}
                         title={!readOnly ? "Double-click to edit" : undefined}
-                        style={{ cursor: readOnly ? 'default' : 'pointer' }}
+                        style={{ cursor: readOnly || isEnriching ? 'default' : 'pointer' }}
                     >
                         {keywords.length > 0 ? (
-                            keywords.map((keyword, index) => (
-                                <div key={index} className={styles.keywordItem}>
-                                    {/* ▼▼▼ Force hide checkboxes in Read-Only mode ▼▼▼ */}
-                                    {selectable && !readOnly && (
-                                        <input
-                                            type="checkbox"
-                                            className={styles.keywordCheckbox}
-                                            checked={selectedKeywords.has(keyword)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={(e) => onKeywordSelect?.(keyword, e.target.checked)}
-                                        />
-                                    )}
-                                    <label className={styles.keywordLabel} style={{ cursor: readOnly ? 'text' : 'pointer' }}>
-                                        {keyword}
-                                    </label>
-                                </div>
-                            ))
+                            keywords.map((keyword, index) => {
+                                // ▼▼▼ NEW KEYWORD HIGHLIGHT LOGIC ▼▼▼
+                                const isNew = newKeywords.has(keyword);
+
+                                return (
+                                    <div
+                                        key={`${keyword}-${index}`}
+                                        className={`${styles.keywordItem} ${isNew ? styles.newKeyword : ''}`}
+                                    >
+                                        {selectable && !readOnly && (
+                                            <input
+                                                type="checkbox"
+                                                className={styles.keywordCheckbox}
+                                                checked={selectedKeywords.has(keyword)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onChange={(e) => onKeywordSelect?.(keyword, e.target.checked)}
+                                            />
+                                        )}
+                                        <label className={styles.keywordLabel} style={{ cursor: readOnly ? 'text' : 'pointer' }}>
+                                            {keyword}
+                                            {/* Optional Badge */}
+                                            {isNew && <span className={styles.newBadge}>New</span>}
+                                        </label>
+                                    </div>
+                                );
+                            })
                         ) : (
                             <span className={styles.placeholder}>
                                 {readOnly ? "No keywords." : "No keywords. Double-click to add."}

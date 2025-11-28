@@ -1,4 +1,5 @@
 import React from 'react';
+import { HiRefresh } from 'react-icons/hi';
 import Collapsible from '../../common/Collapsible/Collapsible';
 import Group from '../Group/Group';
 import AddItemButton from '../../common/AddItemButton/AddItemButton';
@@ -26,7 +27,9 @@ interface CategoryProps {
     onKeywordEdit?: (groupId: string) => void;
     selectedKeywordsByGroup: Map<string, Set<string>>;
     onKeywordSelect: (groupId: string, keyword: string, isSelected: boolean) => void;
-    readOnly?: boolean; // ▼▼▼ NEW PROP ▼▼▼
+    readOnly?: boolean;
+    enrichingGroupIds?: Set<string>;
+    newKeywordsByGroup?: Map<string, Set<string>>;
 }
 
 const Category: React.FC<CategoryProps> = ({
@@ -51,34 +54,56 @@ const Category: React.FC<CategoryProps> = ({
                                                selectedKeywordsByGroup,
                                                onKeywordSelect,
                                                readOnly = false,
+                                               enrichingGroupIds = new Set(),
+                                               newKeywordsByGroup = new Map(),
                                            }) => {
 
-    // ▼▼▼ Read-Only Logic Configuration ▼▼▼
+    const isEnrichingAny = category.groups.some(g => enrichingGroupIds.has(g.id));
+    const hasGroups = category.groups.length > 0;
+
+    // 1. Interactive Buttons
     const collapsibleActions = readOnly ? null : (
         <>
-            <button className={styles.actionButton} onClick={onEnrich}>
+            <button
+                className={styles.actionButton}
+                onClick={onEnrich}
+                disabled={isEnrichingAny || !hasGroups}
+                title={!hasGroups ? "Add a group to enrich" : undefined}
+            >
                 Enrich
             </button>
-            <button className={styles.actionButton} onClick={onRunAnalysis}>
+            <button
+                className={styles.actionButton}
+                onClick={onRunAnalysis}
+                disabled={!hasGroups}
+                title={!hasGroups ? "Add a group to analyze" : undefined}
+            >
                 Run Analysis
             </button>
         </>
     );
 
+    // 2. Status Indicator
+    const statusIndicator = isEnrichingAny ? (
+        <div className="flex items-center text-teal-600 text-sm font-medium animate-pulse" title="Enriching...">
+            <HiRefresh className="animate-spin mr-1" size={16} />
+            <span>Enriching...</span>
+        </div>
+    ) : null;
+
     return (
         <Collapsible
             title={category.name}
             initialOpen={initialOpen}
-            // If readOnly, disable title editing and removal
             onTitleSave={readOnly ? undefined : onNameSave}
             onRemove={readOnly ? undefined : onRemove}
             containerClassName={styles.categoryContainer}
             contentClassName={styles.categoryContent}
-            // If readOnly, disable selection
             selectable={!readOnly}
             selected={selected}
             onSelect={onSelect}
             headerActions={collapsibleActions}
+            statusIndicator={statusIndicator}
         >
             {category.groups.map((group) => (
                 <Group
@@ -98,7 +123,9 @@ const Category: React.FC<CategoryProps> = ({
                     onKeywordSave={(newKeywords) => onKeywordSave(group.id, newKeywords)}
                     onKeywordCopy={(keywordsText) => onKeywordCopy(group.id, keywordsText)}
                     onKeywordEdit={() => onKeywordEdit?.(group.id)}
-                    readOnly={readOnly} // Pass it down
+                    readOnly={readOnly}
+                    isEnriching={enrichingGroupIds.has(group.id)}
+                    newKeywords={newKeywordsByGroup.get(group.id) || new Set()}
                 />
             ))}
 

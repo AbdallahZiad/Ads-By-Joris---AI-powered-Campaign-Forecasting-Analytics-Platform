@@ -18,6 +18,8 @@ export interface CollapsibleProps {
     selectable?: boolean;
     selected?: boolean;
     onSelect?: (isSelected: boolean) => void;
+    // ▼▼▼ NEW PROP ▼▼▼
+    statusIndicator?: ReactNode;
 }
 
 const Collapsible: React.FC<CollapsibleProps> = ({
@@ -35,6 +37,7 @@ const Collapsible: React.FC<CollapsibleProps> = ({
                                                      selectable = false,
                                                      selected = false,
                                                      onSelect,
+                                                     statusIndicator,
                                                  }) => {
     const [isOpen, setIsOpen] = useState(initialOpen);
 
@@ -83,11 +86,22 @@ const Collapsible: React.FC<CollapsibleProps> = ({
 
                 <div className={styles.spacer} />
 
-                {headerActions && (
-                    <div className={styles.headerActions} onClick={(e) => e.stopPropagation()}>
-                        {headerActions}
-                    </div>
-                )}
+                {/* ▼▼▼ STATUS & ACTIONS CONTAINER ▼▼▼ */}
+                <div className={styles.interactiveArea}>
+                    {/* Always visible status, slides left on hover */}
+                    {statusIndicator && (
+                        <div className={styles.statusIndicator}>
+                            {statusIndicator}
+                        </div>
+                    )}
+
+                    {/* Hidden by default, expands on hover */}
+                    {headerActions && (
+                        <div className={styles.headerActions} onClick={(e) => e.stopPropagation()}>
+                            {headerActions}
+                        </div>
+                    )}
+                </div>
 
                 {selectable && (
                     <div className={styles.checkboxContainer} onClick={handleCheckboxClick}>

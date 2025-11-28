@@ -6,6 +6,8 @@ import CategoryComponent from '../Category/Category';
 import DataSourceSettings from './DataSourceSettings';
 import styles from './CategoryManagement.module.css';
 import { HiPlus } from 'react-icons/hi';
+import { mockApi } from '../../../api/mockApi';
+import { MetricsCache } from '../../../utils/metricsCache';
 
 interface CategoryManagementProps {
     onRunAnalysis: (
@@ -29,6 +31,10 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
     const [selectedKeywordsByGroup, setSelectedKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
 
+    // Enrichment State
+    const [enrichingGroupIds, setEnrichingGroupIds] = useState<Set<string>>(new Set());
+    const [newKeywordsByGroup, setNewKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
+
     // Settings State
     const [country, setCountry] = useState<SelectOption | null>(
         COUNTRIES_OPTIONS.find(c => c.id === '2840') || null
@@ -37,18 +43,15 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         LANGUAGES_OPTIONS.find(l => l.id === '1000') || null
     );
 
-    // --- FUNNEL LOGIC: Overwrite local state when scanner data arrives ---
+    // --- FUNNEL LOGIC ---
     useEffect(() => {
         if (initialImportedCategories && initialImportedCategories.length > 0) {
-            // 1. Overwrite: Replace all existing categories with the new scan results
             setCategories(initialImportedCategories);
-
-            // 2. Clean Slate: Wipe all previous selections to prevent stale references
             setSelectedCategoryIds(new Set());
             setSelectedGroupIds(new Set());
             setSelectedKeywordsByGroup(new Map());
+            setNewKeywordsByGroup(new Map());
 
-            // Optional: Scroll to top to show new data
             if (mainContentRef.current) {
                 mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
             }
@@ -148,7 +151,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setSelectedCategoryIds(newSelectedCatIds);
     };
 
-    // --- DATA MUTATION LOGIC ---
+    // --- DATA MUTATION ---
     const handleAddCategory = () => {
         const newCategory: CategoryType = {
             id: generateId('c'),
@@ -156,15 +159,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
             groups: [],
         };
         setCategories(prev => [...prev, newCategory]);
-
-        setTimeout(() => {
-            if (mainContentRef.current) {
-                mainContentRef.current.scrollTo({
-                    top: mainContentRef.current.scrollHeight,
-                    behavior: 'smooth'
-                });
-            }
-        }, 100);
+        setTimeout(() => mainContentRef.current?.scrollTo({ top: mainContentRef.current.scrollHeight, behavior: 'smooth' }), 100);
     };
 
     const handleAddGroup = (categoryId: string) => {
@@ -172,11 +167,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
             if (cat.id === categoryId) {
                 return {
                     ...cat,
-                    groups: [...cat.groups, {
-                        id: generateId('g'),
-                        name: 'New Group',
-                        keywords: []
-                    }]
+                    groups: [...cat.groups, { id: generateId('g'), name: 'New Group', keywords: [] }]
                 };
             }
             return cat;
@@ -186,13 +177,13 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     const handleCategoryNameSave = (categoryId: string, newName: string) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, name: newName } : cat));
     };
+
     const handleCategoryRemove = (categoryId: string) => {
-        if (!window.confirm("Are you sure you want to delete this category?")) return;
+        if (!window.confirm("Delete this category?")) return;
         const category = categories.find(c => c.id === categoryId);
         if (!category) return;
         setCategories(prev => prev.filter(c => c.id !== categoryId));
 
-        // Cleanup selection
         const newSelectedCatIds = new Set(selectedCategoryIds);
         newSelectedCatIds.delete(categoryId);
         setSelectedCategoryIds(newSelectedCatIds);
@@ -205,18 +196,15 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setSelectedGroupIds(newSelectedGroupIds);
         setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
+
     const handleGroupNameSave = (categoryId: string, groupId: string, newName: string) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, name: newName } : grp) } : cat));
     };
-    const handleGroupRemove = (categoryId: string, groupId: string) => {
-        if (!window.confirm("Are you sure you want to delete this group?")) return;
-        setCategories(prev => prev.map(cat =>
-            cat.id === categoryId
-                ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) }
-                : cat
-        ));
 
-        // Cleanup selection
+    const handleGroupRemove = (categoryId: string, groupId: string) => {
+        if (!window.confirm("Delete this group?")) return;
+        setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.filter(g => g.id !== groupId) } : cat));
+
         const newSelectedGroupIds = new Set(selectedGroupIds);
         newSelectedGroupIds.delete(groupId);
         setSelectedGroupIds(newSelectedGroupIds);
@@ -224,35 +212,122 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         newSelectedKeywordsMap.delete(groupId);
         setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
+
     const handleKeywordSave = (categoryId: string, groupId: string, newKeywords: string[]) => {
         setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, groups: cat.groups.map(grp => grp.id === groupId ? { ...grp, keywords: newKeywords } : grp) } : cat));
-
-        // Cleanup selection for modified group to avoid stale keyword references
         const newSelectedKeywordsMap = new Map(selectedKeywordsByGroup);
         newSelectedKeywordsMap.delete(groupId);
         setSelectedKeywordsByGroup(newSelectedKeywordsMap);
     };
 
-    // --- ANALYSIS/ACTION LOGIC ---
-    const handleCategoryEnrich = (category: CategoryType) => { alert(`Enriching Category: ${category.name}`); };
-    const handleGroupEnrich = (group: GroupType) => { alert(`Enriching Group: ${group.name}`); };
+    // --- ENRICHMENT LOGIC ---
+    const enrichSingleGroup = async (group: GroupType) => {
+        if (!country || !language) {
+            alert("Please select a Country and Language.");
+            return;
+        }
+
+        setEnrichingGroupIds(prev => new Set(prev).add(group.id));
+
+        try {
+            // ▼▼▼ ROBUSTNESS: Use Group Name if keywords are empty ▼▼▼
+            const seedKeywords = group.keywords.length > 0 ? group.keywords : [group.name];
+
+            const result = await mockApi.enrichKeywords(seedKeywords, language.id, country.id);
+
+            MetricsCache.cacheResults(result);
+
+            const oldKeywordsSet = new Set(group.keywords);
+            const allResultKeywords = result.map(r => r.text);
+            const newlyAddedSet = new Set<string>();
+
+            allResultKeywords.forEach(k => {
+                if (!oldKeywordsSet.has(k)) newlyAddedSet.add(k);
+            });
+
+            // 1. Update Data
+            setCategories(prev => prev.map(cat => ({
+                ...cat,
+                groups: cat.groups.map(g => {
+                    if (g.id === group.id) {
+                        return { ...g, keywords: allResultKeywords };
+                    }
+                    return g;
+                })
+            })));
+
+            // 2. Highlight "New"
+            setNewKeywordsByGroup(prev => {
+                const next = new Map(prev);
+                next.set(group.id, newlyAddedSet);
+                return next;
+            });
+
+            // 3. Auto-Select New Keywords
+            setSelectedKeywordsByGroup(prev => {
+                const next = new Map(prev);
+                const currentGroupSelection = next.get(group.id) || new Set();
+
+                newlyAddedSet.forEach(newKw => currentGroupSelection.add(newKw));
+
+                next.set(group.id, currentGroupSelection);
+                return next;
+            });
+
+        } catch (err) {
+            console.error(`Failed to enrich group ${group.name}`, err);
+        } finally {
+            setEnrichingGroupIds(prev => {
+                const next = new Set(prev);
+                next.delete(group.id);
+                return next;
+            });
+        }
+    };
+
+    const handleGroupEnrich = (group: GroupType) => {
+        enrichSingleGroup(group);
+    };
+
+    const handleFooterEnrich = async () => {
+        const groupsToEnrich: GroupType[] = [];
+        categories.forEach(cat => {
+            cat.groups.forEach(grp => {
+                if (selectedGroupIds.has(grp.id)) {
+                    groupsToEnrich.push(grp);
+                }
+            });
+        });
+
+        if (groupsToEnrich.length === 0) {
+            alert("No groups selected for enrichment.");
+            return;
+        }
+
+        for (const group of groupsToEnrich) {
+            await enrichSingleGroup(group);
+        }
+    };
+
+    // --- ANALYSIS LOGIC ---
+    const clearNewKeywords = () => {
+        setNewKeywordsByGroup(new Map());
+    };
 
     const handleCategoryRunAnalysis = (category: CategoryType) => {
-        onRunAnalysis(
-            [{ ...category, groups: [...category.groups] }],
-            country?.id,
-            language?.id
-        );
+        if (category.groups.length === 0) return; // Guard
+        clearNewKeywords();
+        onRunAnalysis([{ ...category, groups: [...category.groups] }], country?.id, language?.id);
     };
+
     const handleGroupRunAnalysis = (category: CategoryType, group: GroupType) => {
-        onRunAnalysis(
-            [{ ...category, groups: [group] }],
-            country?.id,
-            language?.id
-        );
+        if (group.keywords.length === 0) return; // Guard
+        clearNewKeywords();
+        onRunAnalysis([{ ...category, groups: [group] }], country?.id, language?.id);
     };
 
     const handleFooterRunAnalysis = () => {
+        clearNewKeywords();
         const selection: CategoryType[] = [];
         categories.forEach(cat => {
             const selectedGroupsForCategory: GroupType[] = [];
@@ -273,8 +348,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         }
         onRunAnalysis(selection, country?.id, language?.id);
     };
-
-    const handleFooterEnrich = () => { alert("Enrich on selected items... (not implemented)"); };
 
     const handleFooterClear = () => {
         setSelectedCategoryIds(new Set());
@@ -303,11 +376,8 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     return (
         <div className={styles.pageContainer}>
             <div className={styles.content}>
-
                 <div className={styles.pageHeader}>
-                    <h1 className="text-2xl font-bold text-gray-800">
-                        Category Planner
-                    </h1>
+                    <h1 className="text-2xl font-bold text-gray-800">Category Planner</h1>
                     <button className={styles.primaryButton} onClick={handleAddCategory}>
                         <HiPlus size={16} className="mr-1" />
                         Add Category
@@ -325,19 +395,25 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                     <CategoryComponent
                         key={category.id}
                         category={category}
-                        initialOpen={categories.length === 1} // Auto open if it's the only one
+                        initialOpen={categories.length === 1}
                         selected={selectedCategoryIds.has(category.id)}
                         onSelect={(isSelected) => handleCategorySelect(category.id, isSelected)}
                         selectedGroupIds={selectedGroupIds}
                         onGroupSelect={(groupId, isSelected) => handleGroupSelect(category.id, groupId, isSelected)}
                         onRemove={() => handleCategoryRemove(category.id)}
                         onNameSave={(newName) => handleCategoryNameSave(category.id, newName)}
-                        onEnrich={() => handleCategoryEnrich(category)}
+                        onEnrich={() => {
+                            const groups = category.groups;
+                            (async () => { for (const g of groups) await enrichSingleGroup(g); })();
+                        }}
                         onRunAnalysis={() => handleCategoryRunAnalysis(category)}
                         onGroupAdd={handleAddGroup}
                         onGroupRemove={(groupId) => handleGroupRemove(category.id, groupId)}
                         onGroupNameSave={(groupId, newName) => handleGroupNameSave(category.id, groupId, newName)}
-                        onGroupEnrich={(groupId) => handleGroupEnrich(category.groups.find(g => g.id === groupId)!)}
+                        onGroupEnrich={(groupId) => {
+                            const grp = category.groups.find(g => g.id === groupId);
+                            if (grp) handleGroupEnrich(grp);
+                        }}
                         onGroupRunAnalysis={(groupId) => handleGroupRunAnalysis(category, category.groups.find(g => g.id === groupId)!)}
                         selectedKeywordsByGroup={selectedKeywordsByGroup}
                         onKeywordSelect={(groupId, keyword, isSelected) =>
@@ -345,6 +421,8 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                         }
                         onKeywordSave={(groupId, newKw) => handleKeywordSave(category.id, groupId, newKw)}
                         onKeywordCopy={() => {}}
+                        enrichingGroupIds={enrichingGroupIds}
+                        newKeywordsByGroup={newKeywordsByGroup}
                     />
                 ))}
 
@@ -354,7 +432,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                     </div>
                 )}
 
-                {/* Spacer div to push content above footer */}
                 <div className={styles.contentSpacer} />
             </div>
 
@@ -368,7 +445,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                     >
                         <button className={styles.actionButton} onClick={handleFooterEnrich}>
-                            Enrich
+                            Enrich Selected
                         </button>
                         <button className={styles.actionButton} onClick={handleFooterRunAnalysis}>
                             Run Analysis

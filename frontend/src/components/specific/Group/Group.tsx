@@ -1,4 +1,5 @@
 import React from 'react';
+import { HiRefresh } from 'react-icons/hi';
 import Collapsible from '../../common/Collapsible/Collapsible';
 import KeywordList from '../../specific/KeywordList/KeywordList';
 import { Group as GroupType } from '../../../types';
@@ -18,7 +19,9 @@ interface GroupProps {
     onKeywordSave: (newKeywords: string[]) => void;
     onKeywordCopy: (keywordsText: string) => void;
     onKeywordEdit?: () => void;
-    readOnly?: boolean; // ▼▼▼ NEW PROP ▼▼▼
+    readOnly?: boolean;
+    isEnriching?: boolean;
+    newKeywords?: Set<string>;
 }
 
 const Group: React.FC<GroupProps> = ({
@@ -36,34 +39,49 @@ const Group: React.FC<GroupProps> = ({
                                          onKeywordCopy,
                                          onKeywordEdit,
                                          readOnly = false,
+                                         isEnriching = false,
+                                         newKeywords = new Set(),
                                      }) => {
 
-    // ▼▼▼ Read-Only Logic Configuration ▼▼▼
+    const hasKeywords = group.keywords.length > 0;
+
+    // 1. Interactive Buttons
     const collapsibleActions = readOnly ? null : (
         <>
-            <button className={styles.actionButton} onClick={onEnrich}>
+            <button className={styles.actionButton} onClick={onEnrich} disabled={isEnriching}>
                 Enrich
             </button>
-            <button className={styles.actionButton} onClick={onRunAnalysis}>
+            <button
+                className={styles.actionButton}
+                onClick={onRunAnalysis}
+                disabled={!hasKeywords} // Disabled if empty
+                title={!hasKeywords ? "Add keywords to analyze" : undefined}
+            >
                 Run Analysis
             </button>
         </>
     );
 
+    // 2. Status Indicator
+    const statusIndicator = isEnriching ? (
+        <div className="flex items-center text-teal-600" title="Enriching in progress...">
+            <HiRefresh className="animate-spin" size={18} />
+        </div>
+    ) : null;
+
     return (
         <Collapsible
             title={group.name}
             initialOpen={initialOpen}
-            // If readOnly, disable title editing and removal
             onTitleSave={readOnly ? undefined : onNameSave}
             onRemove={readOnly ? undefined : onRemove}
             containerClassName={styles.groupContainer}
             contentClassName={styles.groupContent}
-            // If readOnly, disable selection
             selectable={!readOnly}
             selected={selected}
             onSelect={onSelect}
             headerActions={collapsibleActions}
+            statusIndicator={statusIndicator}
         >
             <KeywordList
                 keywords={group.keywords}
@@ -74,7 +92,9 @@ const Group: React.FC<GroupProps> = ({
                 selectable={true}
                 selectedKeywords={selectedKeywords}
                 onKeywordSelect={onKeywordSelect}
-                readOnly={readOnly} // Pass it down
+                readOnly={readOnly}
+                isEnriching={isEnriching}
+                newKeywords={newKeywords}
             />
         </Collapsible>
     );

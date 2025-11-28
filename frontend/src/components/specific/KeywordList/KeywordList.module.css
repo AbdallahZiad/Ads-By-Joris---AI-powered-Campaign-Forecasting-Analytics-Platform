@@ -1,5 +1,6 @@
 .container {
     @apply bg-white overflow-hidden;
+    position: relative; /* For loading overlay */
 }
 
 .withBorder {
@@ -8,6 +9,17 @@
 
 .content {
     @apply relative;
+}
+
+/* ▼▼▼ LOADING OVERLAY ▼▼▼ */
+.loadingOverlay {
+    @apply absolute inset-0 z-20 flex items-center justify-center;
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(1px);
+}
+
+.loadingContent {
+    @apply flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-md border border-teal-100;
 }
 
 .actions {
@@ -23,8 +35,12 @@
     justify-content: center;
 }
 
+.actionButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .textBlock {
-    /* Common styles for both textarea and list container */
     @apply w-full h-40 p-4 text-base font-mono m-0;
     overflow-y: auto;
     scrollbar-width: none;
@@ -36,36 +52,47 @@
 }
 
 .textarea {
-    @apply leading-relaxed text-gray-800; /* Match text styles */
+    @apply leading-relaxed text-gray-800;
     @apply resize-none border-none outline-none;
     background-color: transparent;
     @apply focus:ring-2 focus:ring-inset;
     focus-ring-color: #25DFD6;
 }
 
-/* ▼▼▼ NEW STYLES for selectable list ▼▼▼ */
 .keywordListContainer {
-    /* This container uses the .textBlock styles */
     @apply leading-relaxed text-gray-800;
-    cursor: pointer; /* For double-click to edit */
 }
 
 .keywordItem {
-    @apply flex items-center gap-2 mb-1; /* Spacing for each keyword */
+    @apply flex items-center gap-2 mb-1 px-1 rounded transition-colors duration-500;
+}
+
+/* ▼▼▼ NEW KEYWORD HIGHLIGHTING ▼▼▼ */
+.newKeyword {
+    @apply bg-teal-50 border-l-2 border-teal-400 pl-2 -ml-2;
+    animation: flash 1s ease-out;
+}
+
+@keyframes flash {
+    0% { background-color: #99f6e4; } /* teal-200 */
+    100% { background-color: #f0fdfa; } /* teal-50 */
+}
+
+.newBadge {
+    @apply ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-800 uppercase tracking-wide;
 }
 
 .keywordCheckbox {
-    /* Re-using Collapsible's elegant checkbox style */
     appearance: none;
-    width: 1rem;  /* Slightly smaller */
-    height: 1rem; /* Slightly smaller */
-    border: 1.5px solid #d1d5db; /* gray-300 */
+    width: 1rem;
+    height: 1rem;
+    border: 1.5px solid #d1d5db;
     border-radius: 0.25rem;
     cursor: pointer;
     transition: all 0.15s ease-in-out;
     display: grid;
     place-content: center;
-    flex-shrink: 0; /* Prevent shrinking */
+    flex-shrink: 0;
 }
 
 .keywordCheckbox::before {
@@ -80,7 +107,7 @@
 }
 
 .keywordCheckbox:checked {
-    background-color: #14b8a6; /* teal-500 */
+    background-color: #14b8a6;
     border-color: #14b8a6;
 }
 
@@ -93,10 +120,9 @@
 }
 
 .keywordLabel {
-    @apply flex-grow;
+    @apply flex-grow flex items-center;
     cursor: text;
 }
-/* ▲▲▲ NEW STYLES ▲▲▲ */
 
 .placeholder {
     @apply text-gray-400;
