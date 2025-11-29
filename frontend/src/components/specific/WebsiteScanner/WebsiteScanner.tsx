@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { HiCheck } from 'react-icons/hi';
 import styles from './WebsiteScanner.module.css';
 import { ScannerConfig, ScannerResponse, Category } from '../../../types';
-import { mockApi } from '../../../api/mockApi';
+import { useScanner } from '../../../hooks/useScanner';
 
 // Sub-components
 import ScannerHero from './components/ScannerHero';
@@ -25,20 +25,39 @@ const WebsiteScanner: React.FC<Props> = ({ onScanComplete }) => {
         min_request_delay: 0.5,
     });
 
-    const [isScanning, setIsScanning] = useState(false);
+    // Validation State
+    const [urlError, setUrlError] = useState<string | null>(null);
+
+    // API Hook
+    const { mutateAsync: scanWebsite, isPending: isScanning } = useScanner();
+
     const [scanResult, setScanResult] = useState<ScannerResponse | null>(null);
     const [showStats, setShowStats] = useState(false);
 
-    const handleScan = async () => {
-        setIsScanning(true);
+    const validateUrl = (url: string): boolean => {
+        if (!url || url === 'https://' || url === 'http://') {
+            setUrlError("Please enter a valid website URL");
+            return false;
+        }
         try {
-            const response = await mockApi.scanWebsite(config);
+            new URL(url); // Native browser validation
+            setUrlError(null);
+            return true;
+        } catch (e) {
+            setUrlError("Invalid URL format (e.g., https://example.com)");
+            return false;
+        }
+    };
+
+    const handleScan = async () => {
+        if (!validateUrl(config.start_url)) return;
+
+        try {
+            const response = await scanWebsite(config);
             setScanResult(response);
         } catch (error) {
-            console.error("Scan failed:", error);
-            alert("Scan failed. Please try again.");
-        } finally {
-            setIsScanning(false);
+            // Error is logged by the hook, but we can show a specific UI error here if needed
+            // For now, the hook handles console logging.
         }
     };
 
@@ -58,8 +77,17 @@ const WebsiteScanner: React.FC<Props> = ({ onScanComplete }) => {
     };
 
     const handleReset = () => {
+        // Only clear the result, keeping the previous config/URL for easy editing
         setScanResult(null);
-        setConfig({ ...config, start_url: 'https://' });
+        // We do NOT reset setConfig here anymore.
+    };
+
+    // Wrapper to clear error when user types
+    const handleConfigChange = (newConfig: ScannerConfig) => {
+        if (urlError && newConfig.start_url !== config.start_url) {
+            setUrlError(null);
+        }
+        setConfig(newConfig);
     };
 
     return (
@@ -77,9 +105,10 @@ const WebsiteScanner: React.FC<Props> = ({ onScanComplete }) => {
                     >
                         <ScannerConfigForm
                             config={config}
-                            onConfigChange={setConfig}
+                            onConfigChange={handleConfigChange}
                             isScanning={isScanning}
                             onStartScan={handleScan}
+                            error={urlError} // Pass validation error
                         />
                     </motion.div>
                 ) : (
@@ -117,7 +146,6 @@ const WebsiteScanner: React.FC<Props> = ({ onScanComplete }) => {
 
                         <div className="space-y-4">
                             {scanResult.structured_data.map((rawCat, i) => {
-                                // Create temp category for preview
                                 const tempCat: Category = {
                                     id: `preview_c_${i}`,
                                     name: rawCat.category_name,

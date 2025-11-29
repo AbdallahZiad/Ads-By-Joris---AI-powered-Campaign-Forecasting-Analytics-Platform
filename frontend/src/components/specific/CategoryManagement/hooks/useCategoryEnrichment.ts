@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Category, Group } from '../../../../types';
-import { mockApi } from '../../../../api/mockApi';
-import { MetricsCache } from '../../../../utils/metricsCache';
+import { cacheHistoryBatch } from '../../../../utils/cacheService'; // Updated Import
+import { useEnrichment } from '../../../../hooks/useEnrichment';
 
 interface Props {
     countryId?: string;
@@ -13,6 +13,8 @@ interface Props {
 export const useCategoryEnrichment = ({ countryId, languageId, setCategories, setSelectedKeywordsByGroup }: Props) => {
     const [enrichingGroupIds, setEnrichingGroupIds] = useState<Set<string>>(new Set());
     const [newKeywordsByGroup, setNewKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
+
+    const { mutateAsync: enrichKeywordsApi } = useEnrichment();
 
     const clearNewKeywords = () => {
         setNewKeywordsByGroup(new Map());
@@ -27,21 +29,25 @@ export const useCategoryEnrichment = ({ countryId, languageId, setCategories, se
         setEnrichingGroupIds(prev => new Set(prev).add(group.id));
 
         try {
-            // Use group name as seed if empty
             const seedKeywords = group.keywords.length > 0 ? group.keywords : [group.name];
-            const result = await mockApi.enrichKeywords(seedKeywords, languageId, countryId);
 
-            MetricsCache.cacheResults(result);
+            const response = await enrichKeywordsApi({
+                keywords: seedKeywords,
+                languageId,
+                countryId
+            });
+
+            // ▼▼▼ UPDATED: Use context-aware batch caching ▼▼▼
+            cacheHistoryBatch(response.results, countryId, languageId);
 
             const oldKeywordsSet = new Set(group.keywords);
-            const allResultKeywords = result.map(r => r.text);
+            const allResultKeywords = response.results.map(r => r.text);
             const newlyAddedSet = new Set<string>();
 
             allResultKeywords.forEach(k => {
                 if (!oldKeywordsSet.has(k)) newlyAddedSet.add(k);
             });
 
-            // 1. Update Data
             setCategories(prev => prev.map(cat => ({
                 ...cat,
                 groups: cat.groups.map(g => {
@@ -52,14 +58,12 @@ export const useCategoryEnrichment = ({ countryId, languageId, setCategories, se
                 })
             })));
 
-            // 2. Highlight "New"
             setNewKeywordsByGroup(prev => {
                 const next = new Map(prev);
                 next.set(group.id, newlyAddedSet);
                 return next;
             });
 
-            // 3. Auto-Select New Keywords
             setSelectedKeywordsByGroup(prev => {
                 const next = new Map(prev);
                 const currentGroupSelection = next.get(group.id) || new Set();
