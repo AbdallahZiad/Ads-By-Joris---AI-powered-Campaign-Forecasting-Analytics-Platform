@@ -1,15 +1,26 @@
-// Ideally, this comes from an environment variable like import.meta.env.VITE_API_URL
-// For now, change this to your actual backend URL (e.g., http://localhost:8000)
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = 'http://127.0.0.1:8000'; // Updated to your provided backend URL
 
 export const apiClient = {
-    post: async <T>(endpoint: string, body: any): Promise<T> => {
+    getToken: (): string | null => localStorage.getItem('accessToken'),
+
+    getHeaders: (): HeadersInit => {
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+        };
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    },
+
+    request: async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
         const response = await fetch(`${BASE_URL}${endpoint}`, {
-            method: 'POST',
+            ...options,
             headers: {
-                'Content-Type': 'application/json',
+                ...apiClient.getHeaders(),
+                ...options.headers,
             },
-            body: JSON.stringify(body),
         });
 
         if (!response.ok) {
@@ -20,5 +31,25 @@ export const apiClient = {
         return response.json();
     },
 
-    // We will add get/put/delete here later as needed
+    get: async <T>(endpoint: string): Promise<T> => {
+        return apiClient.request<T>(endpoint, { method: 'GET' });
+    },
+
+    post: async <T>(endpoint: string, body: any): Promise<T> => {
+        return apiClient.request<T>(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    },
+
+    put: async <T>(endpoint: string, body: any): Promise<T> => {
+        return apiClient.request<T>(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+    },
+
+    delete: async <T>(endpoint: string): Promise<T> => {
+        return apiClient.request<T>(endpoint, { method: 'DELETE' });
+    }
 };

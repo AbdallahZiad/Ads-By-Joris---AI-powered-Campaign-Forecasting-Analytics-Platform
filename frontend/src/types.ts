@@ -137,3 +137,45 @@ export interface ScannerResponse {
     crawl_stats: CrawlStats;
     llm_metrics: LlmMetrics;
 }
+
+export interface User {
+    id: string;
+    email: string;
+    full_name?: string;
+    is_active: boolean;
+    is_superuser: boolean;
+    is_verified: boolean;
+    avatar_url?: string;
+    settings?: Record<string, any>;
+    google_id?: string;
+    is_google_ads_linked: boolean;
+}
+
+export interface UserCreate {
+    email: string;
+    password: string;
+    full_name?: string;
+}
+
+export interface UserLogin {
+    email: string;
+    password: string;
+}
+
+export interface TokenResponse {
+    access_token: string;
+    token_type: string;
+}
+
+export interface EmailVerification {
+    token: string;
+}
+
+export interface PasswordReset {
+    token: string;
+    new_password: string;
+}
+
+export interface MessageResponse {
+    message: string;
+}
