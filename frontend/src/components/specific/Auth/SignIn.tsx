@@ -2,21 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useGoogleLogin } from '@react-oauth/google';
 import { FcGoogle } from 'react-icons/fc';
+import { useNavigate } from 'react-router-dom'; // ▼▼▼ Hook Import
 import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
 import { useAuth } from '../../../contexts/AuthContext';
 
-interface Props {
-    onNavigate: (view: 'signup' | 'forgot-password') => void;
-}
-
-const SignIn: React.FC<Props> = ({ onNavigate }) => {
+const SignIn: React.FC = () => {
     const { login } = useAuth();
+    const navigate = useNavigate(); // ▼▼▼ Initialize Hook
+
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [errorMsg, setErrorMsg] = useState('');
 
-    // Mutation for Standard Email/Pass Login
     const loginMutation = useMutation({
         mutationFn: authService.login,
         onSuccess: (data) => {
@@ -27,7 +25,6 @@ const SignIn: React.FC<Props> = ({ onNavigate }) => {
         }
     });
 
-    // Mutation for Google Login (Sends Code to Backend)
     const googleMutation = useMutation({
         mutationFn: authService.loginGoogle,
         onSuccess: (data) => {
@@ -39,30 +36,24 @@ const SignIn: React.FC<Props> = ({ onNavigate }) => {
         }
     });
 
-    // ▼▼▼ NEW: Capture Google Code after Redirect ▼▼▼
     useEffect(() => {
         const query = new URLSearchParams(window.location.search);
         const code = query.get('code');
 
         if (code) {
-            // 1. Clear the code from URL so we don't loop or look messy
             window.history.replaceState({}, document.title, window.location.pathname);
-
-            // 2. Send the "Golden Ticket" to backend
             googleMutation.mutate(code);
         }
-    }, []); // Run once on mount
+    }, []);
 
-    // ▼▼▼ UPDATED: Redirect Flow Configuration ▼▼▼
     const loginWithGoogle = useGoogleLogin({
         flow: 'auth-code',
-        ux_mode: 'redirect', // <--- Critical: Redirects browser to Google
-        redirect_uri: 'http://localhost:8080', // Must match Console & App URL exactly
+        ux_mode: 'redirect',
+        redirect_uri: 'http://localhost:8080',
         onError: (error) => {
             console.error('Google Login Error:', error);
             setErrorMsg('Google Sign-In failed to initialize.');
         }
-        // Note: onSuccess is not used here because the page reloads
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -98,7 +89,8 @@ const SignIn: React.FC<Props> = ({ onNavigate }) => {
                     <div className="flex justify-end -mt-3 mb-4">
                         <button
                             type="button"
-                            onClick={() => onNavigate('forgot-password')}
+                            // ▼▼▼ FIX: Soft Navigation ▼▼▼
+                            onClick={() => navigate('/auth/forgot-password')}
                             className="text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors"
                         >
                             Forgot password?
@@ -129,7 +121,6 @@ const SignIn: React.FC<Props> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Custom Google Button triggering the Hook */}
                 <button
                     type="button"
                     onClick={() => loginWithGoogle()}
@@ -150,7 +141,8 @@ const SignIn: React.FC<Props> = ({ onNavigate }) => {
                     Don't have an account?{' '}
                     <button
                         type="button"
-                        onClick={() => onNavigate('signup')}
+                        // ▼▼▼ FIX: Soft Navigation ▼▼▼
+                        onClick={() => navigate('/auth/signup')}
                         className="font-semibold text-teal-600 hover:text-teal-700 transition-colors"
                     >
                         Sign up

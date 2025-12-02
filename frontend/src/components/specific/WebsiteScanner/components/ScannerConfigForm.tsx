@@ -11,9 +11,10 @@ interface Props {
     isScanning: boolean;
     onStartScan: () => void;
     error?: string | null;
+    isValid: boolean; // ▼▼▼ NEW PROP ▼▼▼
 }
 
-const ScannerConfigForm: React.FC<Props> = ({ config, onConfigChange, isScanning, onStartScan, error }) => {
+const ScannerConfigForm: React.FC<Props> = ({ config, onConfigChange, isScanning, onStartScan, error, isValid }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     return (
@@ -50,7 +51,8 @@ const ScannerConfigForm: React.FC<Props> = ({ config, onConfigChange, isScanning
                             value={config.start_url}
                             onChange={(e) => onConfigChange({ ...config, start_url: e.target.value })}
                             disabled={isScanning}
-                            onKeyDown={(e) => e.key === 'Enter' && onStartScan()}
+                            // Only submit on Enter if valid
+                            onKeyDown={(e) => e.key === 'Enter' && isValid && onStartScan()}
                         />
                         {error && (
                             <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-red-500">
@@ -120,7 +122,6 @@ const ScannerConfigForm: React.FC<Props> = ({ config, onConfigChange, isScanning
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden"
                         >
-                            {/* ▼▼▼ FIX: Added p-1 to prevent focus ring clipping inside overflow-hidden ▼▼▼ */}
                             <div className="pt-4 p-1 grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
                                 <div className="space-y-1">
                                     <label className={styles.label}>Min Request Delay (sec)</label>
@@ -150,7 +151,8 @@ const ScannerConfigForm: React.FC<Props> = ({ config, onConfigChange, isScanning
                 <button
                     className={styles.scanButton}
                     onClick={onStartScan}
-                    disabled={isScanning || !config.start_url}
+                    // ▼▼▼ FIX: Disabled until valid ▼▼▼
+                    disabled={isScanning || !isValid}
                 >
                     {isScanning ? 'Initializing Agents...' : 'Start Intelligence Scan'}
                 </button>

@@ -10,7 +10,6 @@ export const authService = {
         return apiClient.post<TokenResponse>('/api/v1/login', data);
     },
 
-    // ▼▼▼ UPDATED: Now accepts 'code' for Server-Side Verification ▼▼▼
     loginGoogle: async (code: string): Promise<TokenResponse> => {
         return apiClient.post<TokenResponse>('/api/v1/login/google', { code });
     },
@@ -19,8 +18,9 @@ export const authService = {
         return apiClient.post<TokenResponse>('/api/v1/verify-email', data);
     },
 
+    // ▼▼▼ FIXED: Changed to Query Parameter (?email=...) ▼▼▼
     resendVerification: async (email: string): Promise<MessageResponse> => {
-        return apiClient.post<MessageResponse>(`/api/v1/resend-verification/${email}`, {});
+        return apiClient.post<MessageResponse>(`/api/v1/resend-verification?email=${encodeURIComponent(email)}`, {});
     },
 
     requestPasswordRecovery: async (email: string): Promise<MessageResponse> => {

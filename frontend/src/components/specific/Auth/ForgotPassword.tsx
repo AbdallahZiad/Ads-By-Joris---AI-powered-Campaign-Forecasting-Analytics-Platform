@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom'; // ▼▼▼ Hook Import
 import { HiMail } from 'react-icons/hi';
 import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
 
-interface Props {
-    onNavigate: (view: 'signin') => void;
-}
-
-const ForgotPassword: React.FC<Props> = ({ onNavigate }) => {
+const ForgotPassword: React.FC = () => {
+    const navigate = useNavigate(); // ▼▼▼ Initialize Hook
     const [email, setEmail] = useState('');
     const [success, setSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
@@ -41,7 +39,7 @@ const ForgotPassword: React.FC<Props> = ({ onNavigate }) => {
                         We've sent a password reset link to <strong>{email}</strong>.
                     </p>
                     <button
-                        onClick={() => onNavigate('signin')}
+                        onClick={() => navigate('/auth/signin')}
                         className="text-teal-600 font-semibold hover:text-teal-700 underline"
                     >
                         Back to Sign In
@@ -83,7 +81,7 @@ const ForgotPassword: React.FC<Props> = ({ onNavigate }) => {
                 <div className="text-center mt-6">
                     <button
                         type="button"
-                        onClick={() => onNavigate('signin')}
+                        onClick={() => navigate('/auth/signin')}
                         className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
                     >
                         Back to Sign In

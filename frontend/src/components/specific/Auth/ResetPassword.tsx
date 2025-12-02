@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { HiCheckCircle } from 'react-icons/hi';
 import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
 
 interface Props {
-    token: string;
-    onNavigate: (view: 'signin') => void;
+    token?: string; // Optional since we grab from searchParams anyway, but kept for compat
+    // removed onNavigate
 }
 
-const ResetPassword: React.FC<Props> = ({ token, onNavigate }) => {
+const ResetPassword: React.FC<Props> = () => {
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const token = searchParams.get('token') || '';
+
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [success, setSuccess] = useState(false);
@@ -29,6 +34,10 @@ const ResetPassword: React.FC<Props> = ({ token, onNavigate }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMsg('');
+        if (!token) {
+            setErrorMsg("Invalid link. Token missing.");
+            return;
+        }
         if (password.length < 8) {
             setErrorMsg('Password must be at least 8 characters.');
             return;
@@ -51,7 +60,7 @@ const ResetPassword: React.FC<Props> = ({ token, onNavigate }) => {
                         Your password has been updated successfully.
                     </p>
                     <button
-                        onClick={() => onNavigate('signin')}
+                        onClick={() => navigate('/auth/signin')}
                         className="w-full py-3 px-4 bg-gray-900 text-white font-semibold rounded-xl shadow-lg hover:bg-gray-800 transition-all"
                     >
                         Sign In with New Password

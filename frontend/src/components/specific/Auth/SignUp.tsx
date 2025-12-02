@@ -1,27 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
-import { HiCheckCircle, HiRefresh } from 'react-icons/hi';
+import { HiCheckCircle, HiRefresh, HiCheck } from 'react-icons/hi';
 
-interface Props {
-    onNavigate: (view: 'signin') => void;
-}
+const SignUp: React.FC = () => {
+    const navigate = useNavigate();
 
-const SignUp: React.FC<Props> = ({ onNavigate }) => {
     const [formData, setFormData] = useState({ full_name: '', email: '', password: '' });
     const [success, setSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // Timer State
-    const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
+    const [timeLeft, setTimeLeft] = useState(15 * 60);
+    const [resendCooldown, setResendCooldown] = useState(60);
+
+    const [resendStatus, setResendStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     const signupMutation = useMutation({
         mutationFn: authService.signup,
         onSuccess: () => {
             setSuccess(true);
-            setTimeLeft(15 * 60); // Reset timer on success
+            setTimeLeft(15 * 60);
+            setResendCooldown(60);
         },
         onError: (error: Error) => {
             setErrorMsg(error.message || 'Registration failed. Please try again.');
@@ -31,15 +34,18 @@ const SignUp: React.FC<Props> = ({ onNavigate }) => {
     const resendMutation = useMutation({
         mutationFn: authService.resendVerification,
         onSuccess: () => {
-            alert(`Verification email resent to ${formData.email}`);
-            setTimeLeft(15 * 60); // Reset timer
+            setResendStatus('success');
+            setTimeLeft(15 * 60);
+            setResendCooldown(60);
+            setTimeout(() => setResendStatus('idle'), 3000);
         },
         onError: (error: Error) => {
-            alert('Failed to resend email: ' + error.message);
+            console.error("Resend failed:", error);
+            setResendStatus('error');
+            setTimeout(() => setResendStatus('idle'), 3000);
         }
     });
 
-    // Timer Logic
     useEffect(() => {
         if (!success) return;
         if (timeLeft <= 0) return;
@@ -50,6 +56,17 @@ const SignUp: React.FC<Props> = ({ onNavigate }) => {
 
         return () => clearInterval(intervalId);
     }, [success, timeLeft]);
+
+    useEffect(() => {
+        if (!success) return;
+        if (resendCooldown <= 0) return;
+
+        const intervalId = setInterval(() => {
+            setResendCooldown((t) => t - 1);
+        }, 1000);
+
+        return () => clearInterval(intervalId);
+    }, [success, resendCooldown]);
 
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60);
@@ -83,20 +100,55 @@ const SignUp: React.FC<Props> = ({ onNavigate }) => {
 
                     <div className="flex flex-col gap-3">
                         <button
-                            onClick={() => onNavigate('signin')}
+                            onClick={() => navigate('/auth/signin')}
                             className="w-full py-2 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 transition-colors"
                         >
                             Return to Sign In
                         </button>
 
-                        <button
-                            onClick={() => resendMutation.mutate(formData.email)}
-                            disabled={resendMutation.isPending || timeLeft <= 0}
-                            className="text-sm text-gray-500 hover:text-gray-800 underline flex items-center justify-center gap-1 disabled:opacity-50 disabled:no-underline"
-                        >
-                            {resendMutation.isPending ? 'Sending...' : 'Resend verification email'}
-                            {!resendMutation.isPending && <HiRefresh size={14} />}
-                        </button>
+                        <div className="h-8 flex items-center justify-center relative">
+                            <AnimatePresence mode="wait">
+                                {resendStatus === 'success' ? (
+                                    <motion.div
+                                        key="success"
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -5 }}
+                                        className="flex items-center gap-1 text-sm text-green-600 font-medium"
+                                    >
+                                        <HiCheck size={16} /> Email sent successfully!
+                                    </motion.div>
+                                ) : resendStatus === 'error' ? (
+                                    <motion.div
+                                        key="error"
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -5 }}
+                                        className="text-sm text-red-500 font-medium"
+                                    >
+                                        Failed to send email.
+                                    </motion.div>
+                                ) : (
+                                    <motion.button
+                                        key="button"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        onClick={() => resendMutation.mutate(formData.email)}
+                                        disabled={resendMutation.isPending || resendCooldown > 0}
+                                        className="text-sm text-gray-500 hover:text-gray-800 underline flex items-center justify-center gap-1 disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                                    >
+                                        {resendMutation.isPending
+                                            ? 'Sending...'
+                                            : resendCooldown > 0
+                                                ? `Resend available in ${resendCooldown}s`
+                                                : 'Resend verification email'
+                                        }
+                                        {!resendMutation.isPending && resendCooldown === 0 && <HiRefresh size={14} />}
+                                    </motion.button>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </div>
             </AuthLayout>
@@ -151,7 +203,8 @@ const SignUp: React.FC<Props> = ({ onNavigate }) => {
                     Already have an account?{' '}
                     <button
                         type="button"
-                        onClick={() => onNavigate('signin')}
+                        // ▼▼▼ FIX: Use hook navigation instead of missing onNavigate prop ▼▼▼
+                        onClick={() => navigate('/auth/signin')}
                         className="font-semibold text-teal-600 hover:text-teal-700 transition-colors"
                     >
                         Sign in

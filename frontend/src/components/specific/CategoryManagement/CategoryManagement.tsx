@@ -1,35 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Category as CategoryType, Group as GroupType, SelectOption } from '../../../types';
 import { COUNTRIES_OPTIONS, LANGUAGES_OPTIONS } from '../../../constants';
 import DataSourceSettings from './DataSourceSettings';
 import styles from './CategoryManagement.module.css';
+import { useProject } from '../../../contexts/ProjectContext';
 
-// Hooks
 import { useCategoryData } from './hooks/useCategoryData';
 import { useCategorySelection } from './hooks/useCategorySelection';
 import { useCategoryEnrichment } from './hooks/useCategoryEnrichment';
 
-// Components
 import CategoryHeader from './components/CategoryHeader';
 import CategoryList from './components/CategoryList';
 import ContextualFooter from './components/ContextualFooter';
+import PageLayout from '../../common/PageLayout/PageLayout'; // ▼▼▼ Import
 
-interface CategoryManagementProps {
-    onRunAnalysis: (
-        selection: CategoryType[],
-        countryId: string | undefined,
-        languageId: string | undefined
-    ) => void;
-    mainContentRef: React.RefObject<HTMLElement | null>;
-    initialImportedCategories?: CategoryType[];
-}
+const CategoryManagement: React.FC = () => {
+    const navigate = useNavigate();
+    const mainContentRef = useRef<HTMLDivElement>(null);
+    const { importedCategories, setAnalysisInputs } = useProject();
 
-const CategoryManagement: React.FC<CategoryManagementProps> = ({
-                                                                   onRunAnalysis,
-                                                                   mainContentRef,
-                                                                   initialImportedCategories
-                                                               }) => {
-    // 1. Settings State
     const [country, setCountry] = useState<SelectOption | null>(
         COUNTRIES_OPTIONS.find(c => c.id === '2840') || null
     );
@@ -37,7 +27,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         LANGUAGES_OPTIONS.find(l => l.id === '1000') || null
     );
 
-    // 2. Data Hook
     const {
         categories,
         setCategories,
@@ -48,9 +37,8 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         updateGroupName,
         removeGroup,
         updateGroupKeywords
-    } = useCategoryData(initialImportedCategories, mainContentRef);
+    } = useCategoryData(importedCategories, mainContentRef);
 
-    // 3. Selection Hook
     const {
         selectedCategoryIds,
         selectedGroupIds,
@@ -63,9 +51,8 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setSelectedCategoryIds,
         setSelectedGroupIds,
         setSelectedKeywordsByGroup
-    } = useCategorySelection(categories, initialImportedCategories);
+    } = useCategorySelection(categories, importedCategories);
 
-    // 4. Enrichment Hook
     const {
         enrichingGroupIds,
         newKeywordsByGroup,
@@ -78,20 +65,13 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
         setSelectedKeywordsByGroup
     });
 
-    // --- Complex Handlers (Inter-Hook Logic) ---
-
-    // Clean up selection when deleting data
     const handleCategoryRemoveWithSelection = (id: string) => {
         const cat = categories.find(c => c.id === id);
         if (!cat) return;
-
-        removeCategory(id); // Optimistically remove or confirm first inside hook?
-        // Note: The hook handles confirmation. If confirmed:
-        // We manually cleanup selection state here to keep hooks decoupled
+        removeCategory(id);
         const newCatSel = new Set(selectedCategoryIds);
         newCatSel.delete(id);
         setSelectedCategoryIds(newCatSel);
-
         const newGrpSel = new Set(selectedGroupIds);
         const newKwMap = new Map(selectedKeywordsByGroup);
         cat.groups.forEach(g => {
@@ -115,14 +95,18 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     const handleKeywordSaveWithSelection = (catId: string, grpId: string, kws: string[]) => {
         updateGroupKeywords(catId, grpId, kws);
         const newKwMap = new Map(selectedKeywordsByGroup);
-        newKwMap.delete(grpId); // Reset selection for this group on manual edit
+        newKwMap.delete(grpId);
         setSelectedKeywordsByGroup(newKwMap);
     };
 
-    // Analysis Execution
     const runAnalysisWithContext = (selection: CategoryType[]) => {
         clearNewKeywords();
-        onRunAnalysis(selection, country?.id, language?.id);
+        setAnalysisInputs({
+            selection,
+            countryId: country?.id,
+            languageId: language?.id
+        });
+        navigate('/analysis');
     };
 
     const handleCategoryRunAnalysis = (category: CategoryType) => {
@@ -181,54 +165,52 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     const totalSelections = selectedCategoryIds.size + selectedGroupIds.size + selectedKeywordsByGroup.size;
 
     return (
-        <div className={styles.pageContainer}>
-            <div className={styles.content}>
-                <CategoryHeader onAddCategory={addCategory} />
+        // ▼▼▼ WRAPPER: Matches Auth Feel ▼▼▼
+        <PageLayout className="h-full">
+            <div ref={mainContentRef} className={`${styles.pageContainer} h-full overflow-y-auto`}>
+                <div className={styles.content}>
+                    <CategoryHeader onAddCategory={addCategory} />
 
-                <DataSourceSettings
-                    country={country}
-                    language={language}
-                    onCountryChange={setCountry}
-                    onLanguageChange={setLanguage}
+                    <DataSourceSettings
+                        country={country}
+                        language={language}
+                        onCountryChange={setCountry}
+                        onLanguageChange={setLanguage}
+                    />
+
+                    <CategoryList
+                        categories={categories}
+                        selectedCategoryIds={selectedCategoryIds}
+                        selectedGroupIds={selectedGroupIds}
+                        selectedKeywordsByGroup={selectedKeywordsByGroup}
+                        enrichingGroupIds={enrichingGroupIds}
+                        newKeywordsByGroup={newKeywordsByGroup}
+                        onCategorySelect={toggleCategory}
+                        onGroupSelect={toggleGroup}
+                        onKeywordSelect={toggleKeyword}
+                        onCategoryRemove={handleCategoryRemoveWithSelection}
+                        onCategoryNameSave={updateCategoryName}
+                        onGroupAdd={addGroup}
+                        onGroupRemove={handleGroupRemoveWithSelection}
+                        onGroupNameSave={updateGroupName}
+                        onKeywordSave={handleKeywordSaveWithSelection}
+                        onEnrichGroup={enrichGroup}
+                        onRunAnalysisCategory={handleCategoryRunAnalysis}
+                        onRunAnalysisGroup={handleGroupRunAnalysis}
+                    />
+
+                    <div className={styles.contentSpacer} />
+                </div>
+
+                <ContextualFooter
+                    totalSelections={totalSelections}
+                    onEnrich={handleFooterEnrich}
+                    onRunAnalysis={handleFooterRunAnalysis}
+                    onSelectAll={selectAll}
+                    onClear={clearSelection}
                 />
-
-                <CategoryList
-                    categories={categories}
-                    // Selection
-                    selectedCategoryIds={selectedCategoryIds}
-                    selectedGroupIds={selectedGroupIds}
-                    selectedKeywordsByGroup={selectedKeywordsByGroup}
-                    // Enrichment
-                    enrichingGroupIds={enrichingGroupIds}
-                    newKeywordsByGroup={newKeywordsByGroup}
-                    // Selection Handlers
-                    onCategorySelect={toggleCategory}
-                    onGroupSelect={toggleGroup}
-                    onKeywordSelect={toggleKeyword}
-                    // CRUD Handlers
-                    onCategoryRemove={handleCategoryRemoveWithSelection}
-                    onCategoryNameSave={updateCategoryName}
-                    onGroupAdd={addGroup}
-                    onGroupRemove={handleGroupRemoveWithSelection}
-                    onGroupNameSave={updateGroupName}
-                    onKeywordSave={handleKeywordSaveWithSelection}
-                    // Action Handlers
-                    onEnrichGroup={enrichGroup}
-                    onRunAnalysisCategory={handleCategoryRunAnalysis}
-                    onRunAnalysisGroup={handleGroupRunAnalysis}
-                />
-
-                <div className={styles.contentSpacer} />
             </div>
-
-            <ContextualFooter
-                totalSelections={totalSelections}
-                onEnrich={handleFooterEnrich}
-                onRunAnalysis={handleFooterRunAnalysis}
-                onSelectAll={selectAll}
-                onClear={clearSelection}
-            />
-        </div>
+        </PageLayout>
     );
 };
 

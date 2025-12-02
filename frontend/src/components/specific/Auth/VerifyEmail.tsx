@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useSearchParams, useNavigate } from 'react-router-dom'; // ▼▼▼ Updated Imports
 import { HiCheckCircle, HiExclamationCircle, HiRefresh } from 'react-icons/hi';
 import AuthLayout from './AuthLayout';
 import { authService } from '../../../api/services/authService';
 import { useAuth } from '../../../contexts/AuthContext';
 
-interface Props {
-    token: string;
-}
-
-const VerifyEmail: React.FC<Props> = ({ token }) => {
+const VerifyEmail: React.FC = () => {
     const { login } = useAuth();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const token = searchParams.get('token'); // ▼▼▼ Hook way
+
     const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -18,9 +19,9 @@ const VerifyEmail: React.FC<Props> = ({ token }) => {
         mutationFn: authService.verifyEmail,
         onSuccess: (data) => {
             setStatus('success');
-            // Auto login after verification
             setTimeout(() => {
                 login(data);
+                navigate('/scanner'); // Redirect to app
             }, 2000);
         },
         onError: (error: Error) => {
@@ -34,7 +35,7 @@ const VerifyEmail: React.FC<Props> = ({ token }) => {
             mutation.mutate({ token });
         } else {
             setStatus('error');
-            setErrorMsg('No verification token found.');
+            setErrorMsg('No verification token found in URL.');
         }
     }, [token]);
 
@@ -65,9 +66,12 @@ const VerifyEmail: React.FC<Props> = ({ token }) => {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Verification Failed</h3>
                         <p className="text-red-600 mb-6">{errorMsg}</p>
-                        <a href="/" className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors">
+                        <button
+                            onClick={() => navigate('/')}
+                            className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                        >
                             Back to Home
-                        </a>
+                        </button>
                     </div>
                 )}
             </div>
