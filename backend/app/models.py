@@ -105,11 +105,6 @@ class TokenPayload(SQLModel):
 
 
 class GoogleAuthRequest(SQLModel):
-    """
-    Supports both flows:
-    1. id_token (Implicit Flow - Requires JS Origin whitelist)
-    2. code (Auth Code Flow - Requires Redirect URI whitelist) -> WE ARE USING THIS
-    """
     id_token: str | None = None
     code: str | None = None
     redirect_uri: str | None = "http://localhost:8080"
@@ -137,6 +132,7 @@ class BodyToken(SQLModel):
 
 # --- Project Hierarchy Models ---
 
+# 1. Keywords
 class Keyword(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     text: str = Field(index=True)
@@ -144,7 +140,14 @@ class Keyword(SQLModel, table=True):
     group_id: uuid.UUID = Field(foreign_key="group.id", ondelete="CASCADE")
     group: "Group" = Relationship(back_populates="keywords")
 
+class KeywordCreate(SQLModel):
+    text: str
 
+class KeywordBulkCreate(SQLModel):
+    keywords: List[str]
+
+
+# 2. Groups
 class Group(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
@@ -156,7 +159,15 @@ class Group(SQLModel, table=True):
 
     google_ad_group_id: str | None = Field(default=None)
 
+class GroupCreate(SQLModel):
+    name: str
 
+class GroupUpdate(SQLModel):
+    name: str | None = None
+    google_ad_group_id: str | None = None
+
+
+# 3. Categories
 class Category(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
@@ -166,7 +177,14 @@ class Category(SQLModel, table=True):
 
     groups: list[Group] = Relationship(back_populates="category", cascade_delete=True)
 
+class CategoryCreate(SQLModel):
+    name: str
 
+class CategoryUpdate(SQLModel):
+    name: str
+
+
+# 4. Projects
 class Project(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str = Field(max_length=255)
@@ -177,6 +195,27 @@ class Project(SQLModel, table=True):
     owner: User = Relationship(back_populates="projects")
 
     categories: list[Category] = Relationship(back_populates="project", cascade_delete=True)
+
+class ProjectCreate(SQLModel):
+    title: str
+
+class ProjectUpdate(SQLModel):
+    title: str | None = None
+
+
+# --- Nested Input Models for Full Tree Creation ---
+
+class GroupCreateFull(SQLModel):
+    name: str
+    keywords: List[str] # Simple list of strings for ease of input
+
+class CategoryCreateFull(SQLModel):
+    name: str
+    groups: List[GroupCreateFull]
+
+class ProjectCreateFull(SQLModel):
+    title: str
+    categories: List[CategoryCreateFull]
 
 
 # --- Response Models for Project Hierarchy ---
