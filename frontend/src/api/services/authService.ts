@@ -14,11 +14,18 @@ export const authService = {
         return apiClient.post<TokenResponse>('/api/v1/login/google', { code });
     },
 
+    // ▼▼▼ NEW: Link Google Ads ▼▼▼
+    linkGoogleAds: async (code: string): Promise<MessageResponse> => {
+        return apiClient.post<MessageResponse>('/api/v1/users/me/link-google-ads', {
+            code,
+            redirect_uri: 'http://localhost:8080' // Must match Google Console exactly
+        });
+    },
+
     verifyEmail: async (data: EmailVerification): Promise<TokenResponse> => {
         return apiClient.post<TokenResponse>('/api/v1/verify-email', data);
     },
 
-    // ▼▼▼ FIXED: Changed to Query Parameter (?email=...) ▼▼▼
     resendVerification: async (email: string): Promise<MessageResponse> => {
         return apiClient.post<MessageResponse>(`/api/v1/resend-verification?email=${encodeURIComponent(email)}`, {});
     },

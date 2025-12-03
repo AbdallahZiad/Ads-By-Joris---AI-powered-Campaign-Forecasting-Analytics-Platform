@@ -15,10 +15,11 @@ const MainLayout: React.FC = () => {
         if (path.includes('/analysis')) return 'analysis';
         if (path.includes('/planner')) return 'management';
         if (path.includes('/scanner')) return 'scanner';
+        if (path.includes('/google-ads')) return 'google-ads';
         return 'none';
     };
 
-    const handleNavigate = (mode: 'scanner' | 'management' | 'analysis') => {
+    const handleNavigate = (mode: 'scanner' | 'management' | 'analysis' | 'google-ads') => {
         // Strict Flow Control
         if (mode === 'management' && !hasScannedData) return;
         if (mode === 'analysis' && !hasAnalysisData) return;
@@ -26,7 +27,8 @@ const MainLayout: React.FC = () => {
         const routes = {
             scanner: '/scanner',
             management: '/planner',
-            analysis: '/analysis'
+            analysis: '/analysis',
+            'google-ads': '/google-ads'
         };
         navigate(routes[mode]);
     };
@@ -44,11 +46,7 @@ const MainLayout: React.FC = () => {
                     onAuthClick={() => navigate('/auth/signin')}
                 />
 
-                {/* ▼▼▼ FIX: Static Main Container ▼▼▼
-                    We removed AnimatePresence here.
-                    Now, this container NEVER unmounts during route changes.
-                    The specific pages (Scanner, Planner, Auth) manage their own entry animations.
-                */}
+                {/* Static Main Container - No Animation Here to prevent Layout Shift */}
                 <main className="flex-1 overflow-y-auto ml-16 relative">
                     <Outlet />
                 </main>

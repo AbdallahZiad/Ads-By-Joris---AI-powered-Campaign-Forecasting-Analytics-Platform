@@ -7,13 +7,14 @@ import {
     HiOutlineCog,
     HiOutlineUserCircle,
     HiLogout,
-    HiUser
+    HiUser,
+    HiCheck
 } from 'react-icons/hi';
 import { AiOutlineGoogle } from 'react-icons/ai';
 import styles from './Sidebar.module.css';
 import { useAuth } from '../../../contexts/AuthContext';
 
-type ViewMode = 'management' | 'analysis' | 'scanner';
+type ViewMode = 'management' | 'analysis' | 'scanner' | 'google-ads';
 
 interface NavLinkProps {
     icon: React.ReactNode;
@@ -21,12 +22,13 @@ interface NavLinkProps {
     active?: boolean;
     disabled?: boolean;
     onClick?: () => void;
+    indicator?: React.ReactNode;
 }
 
-const NavLink: React.FC<NavLinkProps> = ({ icon, label, active = false, disabled = false, onClick }) => {
+const NavLink: React.FC<NavLinkProps> = ({ icon, label, active = false, disabled = false, onClick, indicator }) => {
     return (
         <button
-            className={`${styles.navButton} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`${styles.navButton} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${active ? 'bg-gray-700 text-white' : ''}`}
             title={label}
             aria-label={label}
             onClick={!disabled ? onClick : undefined}
@@ -40,15 +42,21 @@ const NavLink: React.FC<NavLinkProps> = ({ icon, label, active = false, disabled
                 />
             )}
 
-            <span className={`${styles.iconWrapper} ${active ? styles.navButtonActiveText : ''}`}>
+            <span className={`${styles.iconWrapper} ${active ? styles.navButtonActiveText : ''} relative`}>
                 {icon}
+                {/* Indicator Positioned on the Shoulder */}
+                {indicator && (
+                    <div className="absolute -top-1 -right-1 z-10">
+                        {indicator}
+                    </div>
+                )}
             </span>
         </button>
     );
 };
 
 interface SidebarProps {
-    viewMode: ViewMode;
+    viewMode: ViewMode | 'none';
     onNavigate: (mode: ViewMode) => void;
     hasScannedData: boolean;
     hasAnalysisData: boolean;
@@ -60,7 +68,16 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData,
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Close menu when clicking outside
+    const isAdsLinked = !!user?.is_google_ads_linked;
+
+    const handleGoogleAdsClick = () => {
+        if (!isAuthenticated) {
+            onAuthClick();
+            return;
+        }
+        onNavigate('google-ads');
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -99,11 +116,20 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData,
                     disabled={!hasAnalysisData}
                     onClick={() => onNavigate('analysis')}
                 />
+
+                {/* ▼▼▼ GOOGLE BUTTON ▼▼▼ */}
                 <NavLink
                     icon={<AiOutlineGoogle size={22} />}
-                    label="Google Campaigns"
-                    active={false}
-                    disabled={true}
+                    label={isAdsLinked ? "Google Ads Linked" : "Link Google Ads"}
+                    active={viewMode === 'google-ads'}
+                    disabled={false}
+                    onClick={handleGoogleAdsClick}
+                    // FIX: Changed border-2 to border (1px) to stop the "blob" look
+                    indicator={isAdsLinked ? (
+                        <div className="flex items-center justify-center w-2.5 h-2.5 bg-green-500 rounded-full border border-white shadow-sm">
+                            <HiCheck className="text-white" size={6} strokeWidth={4} />
+                        </div>
+                    ) : null}
                 />
             </div>
 
@@ -114,19 +140,17 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData,
                 />
 
                 {isAuthenticated ? (
-                    // Logged In State with Clickable Menu
                     <div className="relative" ref={menuRef}>
                         <button
                             className={`${styles.profileButton} ${isMenuOpen ? 'ring-2 ring-teal-500' : ''}`}
                             title={user?.full_name || user?.email}
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
                         >
-                            {/* ▼▼▼ AVATAR LOGIC ▼▼▼ */}
                             {user?.avatar_url ? (
                                 <img
                                     src={user.avatar_url}
                                     alt="Profile"
-                                    className={`${styles.profileImage} object-cover`} // Ensure fit
+                                    className={`${styles.profileImage} object-cover`}
                                 />
                             ) : (
                                 <div className="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center text-sm font-bold">
@@ -171,7 +195,6 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData,
                         </AnimatePresence>
                     </div>
                 ) : (
-                    // Guest State
                     <button
                         className={`${styles.profileButton} animate-pulse`}
                         title="Sign In"
