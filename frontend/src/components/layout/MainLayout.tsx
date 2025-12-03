@@ -7,9 +7,8 @@ import { useProject } from '../../contexts/ProjectContext';
 const MainLayout: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { hasScannedData, hasAnalysisData } = useProject();
+    const { hasAnalysisData } = useProject(); // Removed hasScannedData
 
-    // Determine active view based on path
     const getCurrentViewMode = () => {
         const path = location.pathname;
         if (path.includes('/analysis')) return 'analysis';
@@ -20,8 +19,7 @@ const MainLayout: React.FC = () => {
     };
 
     const handleNavigate = (mode: 'scanner' | 'management' | 'analysis' | 'google-ads') => {
-        // Strict Flow Control
-        if (mode === 'management' && !hasScannedData) return;
+        // Strict Flow Control (Only Analysis needs data presence check)
         if (mode === 'analysis' && !hasAnalysisData) return;
 
         const routes = {
@@ -41,12 +39,10 @@ const MainLayout: React.FC = () => {
                     // @ts-ignore
                     viewMode={getCurrentViewMode()}
                     onNavigate={handleNavigate}
-                    hasScannedData={hasScannedData}
                     hasAnalysisData={hasAnalysisData}
                     onAuthClick={() => navigate('/auth/signin')}
                 />
 
-                {/* Static Main Container - No Animation Here to prevent Layout Shift */}
                 <main className="flex-1 overflow-y-auto ml-16 relative">
                     <Outlet />
                 </main>

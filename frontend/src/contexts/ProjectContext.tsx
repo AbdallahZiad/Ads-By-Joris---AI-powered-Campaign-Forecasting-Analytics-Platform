@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Category } from '../types';
+import { useAuth } from './AuthContext';
 
 interface AnalysisInputs {
     selection: Category[];
@@ -8,50 +9,50 @@ interface AnalysisInputs {
 }
 
 interface ProjectContextType {
-    // Data State
-    importedCategories: Category[];
-    setImportedCategories: (cats: Category[]) => void;
+    currentProjectId: string | null;
+    setCurrentProjectId: (id: string | null) => void;
     analysisInputs: AnalysisInputs | null;
     setAnalysisInputs: (inputs: AnalysisInputs | null) => void;
-
-    // Flow Control Flags
-    hasScannedData: boolean;
     hasAnalysisData: boolean;
-
-    // Actions
-    resetProject: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [importedCategories, setImportedCategoriesState] = useState<Category[]>([]);
-    const [analysisInputs, setAnalysisInputs] = useState<AnalysisInputs | null>(null);
+    // ▼▼▼ FIX: Grab isLoading to prevent premature wiping on reload ▼▼▼
+    const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-    // Derived states
-    const hasScannedData = importedCategories.length > 0;
+    const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
+        return localStorage.getItem('active_project_id');
+    });
+
+    const [analysisInputs, setAnalysisInputs] = useState<AnalysisInputs | null>(null);
     const hasAnalysisData = !!analysisInputs;
 
-    const setImportedCategories = (cats: Category[]) => {
-        setImportedCategoriesState(cats);
-        // When new data comes in, strictly reset analysis to enforce the funnel
-        setAnalysisInputs(null);
-    };
+    useEffect(() => {
+        if (currentProjectId) {
+            localStorage.setItem('active_project_id', currentProjectId);
+        } else {
+            localStorage.removeItem('active_project_id');
+        }
+    }, [currentProjectId]);
 
-    const resetProject = () => {
-        setImportedCategoriesState([]);
-        setAnalysisInputs(null);
-    };
+    // ▼▼▼ SECURITY FIX: Only wipe if we are definitely logged out (not just loading) ▼▼▼
+    useEffect(() => {
+        if (!isAuthLoading && !isAuthenticated) {
+            setCurrentProjectId(null);
+            setAnalysisInputs(null);
+            localStorage.removeItem('active_project_id');
+        }
+    }, [isAuthenticated, isAuthLoading]);
 
     return (
         <ProjectContext.Provider value={{
-            importedCategories,
-            setImportedCategories,
+            currentProjectId,
+            setCurrentProjectId,
             analysisInputs,
             setAnalysisInputs,
-            hasScannedData,
-            hasAnalysisData,
-            resetProject
+            hasAnalysisData
         }}>
             {children}
         </ProjectContext.Provider>

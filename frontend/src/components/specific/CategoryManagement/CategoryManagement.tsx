@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Category as CategoryType, Group as GroupType, SelectOption } from '../../../types';
 import { COUNTRIES_OPTIONS, LANGUAGES_OPTIONS } from '../../../constants';
@@ -6,19 +6,21 @@ import DataSourceSettings from './DataSourceSettings';
 import styles from './CategoryManagement.module.css';
 import { useProject } from '../../../contexts/ProjectContext';
 
-import { useCategoryData } from './hooks/useCategoryData';
-import { useCategorySelection } from './hooks/useCategorySelection';
+// Hooks
+import { useProjectSync } from './hooks/useProjectSync';
 import { useCategoryEnrichment } from './hooks/useCategoryEnrichment';
+import { useCategorySelection } from './hooks/useCategorySelection';
 
-import CategoryHeader from './components/CategoryHeader';
+// Components
 import CategoryList from './components/CategoryList';
 import ContextualFooter from './components/ContextualFooter';
-import PageLayout from '../../common/PageLayout/PageLayout'; // ▼▼▼ Import
+import ProjectSelector from './components/ProjectSelector';
+import PageLayout from '../../common/PageLayout/PageLayout';
+import { HiPlus, HiOutlineTemplate } from 'react-icons/hi';
 
 const CategoryManagement: React.FC = () => {
     const navigate = useNavigate();
-    const mainContentRef = useRef<HTMLDivElement>(null);
-    const { importedCategories, setAnalysisInputs } = useProject();
+    const { currentProjectId, setCurrentProjectId, setAnalysisInputs } = useProject();
 
     const [country, setCountry] = useState<SelectOption | null>(
         COUNTRIES_OPTIONS.find(c => c.id === '2840') || null
@@ -28,16 +30,23 @@ const CategoryManagement: React.FC = () => {
     );
 
     const {
-        categories,
-        setCategories,
-        addCategory,
-        addGroup,
-        updateCategoryName,
-        removeCategory,
-        updateGroupName,
-        removeGroup,
-        updateGroupKeywords
-    } = useCategoryData(importedCategories, mainContentRef);
+        projects,
+        activeProject,
+        isLoadingActive,
+        createProject,
+        updateProject,
+        deleteProject, // Imported
+        createCategory,
+        updateCategory,
+        deleteCategory,
+        createGroup,
+        updateGroup,
+        deleteGroup,
+        bulkAddKeywords,
+        deleteKeyword
+    } = useProjectSync(currentProjectId);
+
+    const categories = activeProject?.categories || [];
 
     const {
         selectedCategoryIds,
@@ -51,7 +60,7 @@ const CategoryManagement: React.FC = () => {
         setSelectedCategoryIds,
         setSelectedGroupIds,
         setSelectedKeywordsByGroup
-    } = useCategorySelection(categories, importedCategories);
+    } = useCategorySelection(categories, undefined);
 
     const {
         enrichingGroupIds,
@@ -61,42 +70,75 @@ const CategoryManagement: React.FC = () => {
     } = useCategoryEnrichment({
         countryId: country?.id,
         languageId: language?.id,
-        setCategories,
+        onBulkAdd: bulkAddKeywords,
         setSelectedKeywordsByGroup
     });
 
-    const handleCategoryRemoveWithSelection = (id: string) => {
-        const cat = categories.find(c => c.id === id);
-        if (!cat) return;
-        removeCategory(id);
-        const newCatSel = new Set(selectedCategoryIds);
-        newCatSel.delete(id);
-        setSelectedCategoryIds(newCatSel);
-        const newGrpSel = new Set(selectedGroupIds);
-        const newKwMap = new Map(selectedKeywordsByGroup);
-        cat.groups.forEach(g => {
-            newGrpSel.delete(g.id);
-            newKwMap.delete(g.id);
-        });
-        setSelectedGroupIds(newGrpSel);
-        setSelectedKeywordsByGroup(newKwMap);
+    const handleCreateProject = async (title: string) => {
+        try {
+            const newProj = await createProject({ title });
+            setCurrentProjectId(newProj.id);
+        } catch (e) {
+            console.error("Failed to create project");
+        }
     };
 
-    const handleGroupRemoveWithSelection = (catId: string, grpId: string) => {
-        removeGroup(catId, grpId);
-        const newGrpSel = new Set(selectedGroupIds);
-        newGrpSel.delete(grpId);
-        setSelectedGroupIds(newGrpSel);
-        const newKwMap = new Map(selectedKeywordsByGroup);
-        newKwMap.delete(grpId);
-        setSelectedKeywordsByGroup(newKwMap);
+    const handleRenameProject = async (id: string, title: string) => {
+        try {
+            await updateProject({ id, title });
+        } catch (e) {
+            console.error("Failed to rename project");
+        }
     };
 
-    const handleKeywordSaveWithSelection = (catId: string, grpId: string, kws: string[]) => {
-        updateGroupKeywords(catId, grpId, kws);
-        const newKwMap = new Map(selectedKeywordsByGroup);
-        newKwMap.delete(grpId);
-        setSelectedKeywordsByGroup(newKwMap);
+    const handleDeleteProject = async (id: string) => {
+        try {
+            await deleteProject(id);
+            // If the deleted project was the active one, clear selection
+            if (id === currentProjectId) {
+                setCurrentProjectId(null);
+            }
+        } catch (e) {
+            console.error("Failed to delete project");
+            alert("Failed to delete project.");
+        }
+    };
+
+    const handleAddCategory = () => {
+        if (!currentProjectId) return;
+        createCategory({ projectId: currentProjectId, name: "New Category" });
+    };
+
+    const handleAddGroup = (catId: string) => {
+        createGroup({ categoryId: catId, name: "New Group" });
+    };
+
+    const handleKeywordSave = async (catId: string, grpId: string, newKeywordsList: string[]) => {
+        const category = categories.find(c => c.id === catId);
+        const group = category?.groups.find(g => g.id === grpId);
+        if (!group) return;
+
+        const oldKeywords = group.keywords;
+        const newSet = new Set(newKeywordsList);
+        const oldSet = new Set(oldKeywords.map(k => k.text));
+
+        const toAdd = newKeywordsList.filter(txt => !oldSet.has(txt));
+
+        const toDeleteIds = oldKeywords
+            .filter(k => !newSet.has(k.text))
+            .map(k => k.id);
+
+        try {
+            const promises = [];
+            toDeleteIds.forEach(id => promises.push(deleteKeyword(id)));
+            if (toAdd.length > 0) {
+                promises.push(bulkAddKeywords({ groupId: grpId, keywords: toAdd }));
+            }
+            await Promise.all(promises);
+        } catch (e) {
+            console.error("Failed to sync keywords", e);
+            alert("Failed to save keywords.");
+        }
     };
 
     const runAnalysisWithContext = (selection: CategoryType[]) => {
@@ -126,7 +168,7 @@ const CategoryManagement: React.FC = () => {
             cat.groups.forEach(group => {
                 const groupKeywordSelections = selectedKeywordsByGroup.get(group.id);
                 if (groupKeywordSelections && groupKeywordSelections.size > 0) {
-                    const filteredKeywords = group.keywords.filter(k => groupKeywordSelections.has(k));
+                    const filteredKeywords = group.keywords.filter(k => groupKeywordSelections.has(k.text));
                     selectedGroupsForCategory.push({ ...group, keywords: filteredKeywords });
                 }
             });
@@ -162,14 +204,55 @@ const CategoryManagement: React.FC = () => {
         }
     };
 
+    const handleCategoryRemoveWithSelection = (id: string) => {
+        deleteCategory(id);
+        const newCatSel = new Set(selectedCategoryIds);
+        newCatSel.delete(id);
+        setSelectedCategoryIds(newCatSel);
+    };
+
+    const handleGroupRemoveWithSelection = (_catId: string, grpId: string) => {
+        deleteGroup(grpId);
+        const newGrpSel = new Set(selectedGroupIds);
+        newGrpSel.delete(grpId);
+        setSelectedGroupIds(newGrpSel);
+
+        const newKwMap = new Map(selectedKeywordsByGroup);
+        newKwMap.delete(grpId);
+        setSelectedKeywordsByGroup(newKwMap);
+    };
+
     const totalSelections = selectedCategoryIds.size + selectedGroupIds.size + selectedKeywordsByGroup.size;
 
     return (
-        // ▼▼▼ WRAPPER: Matches Auth Feel ▼▼▼
-        <PageLayout className="h-full">
-            <div ref={mainContentRef} className={`${styles.pageContainer} h-full overflow-y-auto`}>
-                <div className={styles.content}>
-                    <CategoryHeader onAddCategory={addCategory} />
+        <PageLayout className="h-full flex flex-col bg-gray-50">
+            <div className="flex-1 overflow-y-auto">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+                    <div className="flex justify-between items-start mb-8">
+                        <div className="flex items-center gap-6">
+                            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Category Planner</h1>
+                            <div className="h-10 w-px bg-gray-300" />
+                            <ProjectSelector
+                                projects={projects}
+                                currentProjectId={currentProjectId}
+                                onSelect={setCurrentProjectId}
+                                onCreate={handleCreateProject}
+                                onRename={handleRenameProject}
+                                onDelete={handleDeleteProject} // ▼▼▼ FIXED: Passed prop here
+                            />
+                        </div>
+
+                        {currentProjectId && (
+                            <button
+                                onClick={handleAddCategory}
+                                className={styles.primaryButton}
+                            >
+                                <HiPlus size={16} className="mr-1" />
+                                Add Category
+                            </button>
+                        )}
+                    </div>
 
                     <DataSourceSettings
                         country={country}
@@ -178,38 +261,59 @@ const CategoryManagement: React.FC = () => {
                         onLanguageChange={setLanguage}
                     />
 
-                    <CategoryList
-                        categories={categories}
-                        selectedCategoryIds={selectedCategoryIds}
-                        selectedGroupIds={selectedGroupIds}
-                        selectedKeywordsByGroup={selectedKeywordsByGroup}
-                        enrichingGroupIds={enrichingGroupIds}
-                        newKeywordsByGroup={newKeywordsByGroup}
-                        onCategorySelect={toggleCategory}
-                        onGroupSelect={toggleGroup}
-                        onKeywordSelect={toggleKeyword}
-                        onCategoryRemove={handleCategoryRemoveWithSelection}
-                        onCategoryNameSave={updateCategoryName}
-                        onGroupAdd={addGroup}
-                        onGroupRemove={handleGroupRemoveWithSelection}
-                        onGroupNameSave={updateGroupName}
-                        onKeywordSave={handleKeywordSaveWithSelection}
-                        onEnrichGroup={enrichGroup}
-                        onRunAnalysisCategory={handleCategoryRunAnalysis}
-                        onRunAnalysisGroup={handleGroupRunAnalysis}
-                    />
+                    {isLoadingActive ? (
+                        <div className="flex items-center justify-center h-64 text-gray-400">
+                            Loading Project Data...
+                        </div>
+                    ) : !currentProjectId ? (
+                        <div className="flex flex-col items-center justify-center h-96 border-2 border-dashed border-gray-200 rounded-2xl bg-white text-gray-400">
+                            <HiOutlineTemplate size={48} className="mb-4 opacity-50" />
+                            <p className="text-lg font-medium">No Project Selected</p>
+                            <p className="text-sm">Select a project above or create a new one to get started.</p>
+                        </div>
+                    ) : categories.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-96 border-2 border-dashed border-gray-200 rounded-2xl bg-white text-gray-400">
+                            <p className="mb-4">This project is empty.</p>
+                            <div className="flex gap-4">
+                                <button onClick={handleAddCategory} className="text-teal-600 hover:underline">Add Manually</button>
+                                <span>or</span>
+                                <button onClick={() => navigate('/scanner')} className="text-teal-600 hover:underline">Import via Scanner</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <CategoryList
+                            categories={categories}
+                            selectedCategoryIds={selectedCategoryIds}
+                            selectedGroupIds={selectedGroupIds}
+                            selectedKeywordsByGroup={selectedKeywordsByGroup}
+                            enrichingGroupIds={enrichingGroupIds}
+                            newKeywordsByGroup={newKeywordsByGroup}
+                            onCategorySelect={toggleCategory}
+                            onGroupSelect={toggleGroup}
+                            onKeywordSelect={toggleKeyword}
+                            onCategoryRemove={handleCategoryRemoveWithSelection}
+                            onCategoryNameSave={(id, name) => updateCategory({id, name})}
+                            onGroupAdd={handleAddGroup}
+                            onGroupRemove={handleGroupRemoveWithSelection}
+                            onGroupNameSave={(_catId, grpId, name) => updateGroup({id: grpId, name})}
+                            onKeywordSave={handleKeywordSave}
+                            onEnrichGroup={enrichGroup}
+                            onRunAnalysisCategory={handleCategoryRunAnalysis}
+                            onRunAnalysisGroup={handleGroupRunAnalysis}
+                        />
+                    )}
 
                     <div className={styles.contentSpacer} />
                 </div>
-
-                <ContextualFooter
-                    totalSelections={totalSelections}
-                    onEnrich={handleFooterEnrich}
-                    onRunAnalysis={handleFooterRunAnalysis}
-                    onSelectAll={selectAll}
-                    onClear={clearSelection}
-                />
             </div>
+
+            <ContextualFooter
+                totalSelections={totalSelections}
+                onEnrich={handleFooterEnrich}
+                onRunAnalysis={handleFooterRunAnalysis}
+                onSelectAll={selectAll}
+                onClear={clearSelection}
+            />
         </PageLayout>
     );
 };

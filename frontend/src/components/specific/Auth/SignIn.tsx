@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useGoogleLogin } from '@react-oauth/google';
 import { FcGoogle } from 'react-icons/fc';
-import { useNavigate } from 'react-router-dom'; // ▼▼▼ Hook Import
+import { useNavigate } from 'react-router-dom';
 import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
@@ -10,7 +10,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 
 const SignIn: React.FC = () => {
     const { login } = useAuth();
-    const navigate = useNavigate(); // ▼▼▼ Initialize Hook
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [errorMsg, setErrorMsg] = useState('');
@@ -89,7 +89,6 @@ const SignIn: React.FC = () => {
                     <div className="flex justify-end -mt-3 mb-4">
                         <button
                             type="button"
-                            // ▼▼▼ FIX: Soft Navigation ▼▼▼
                             onClick={() => navigate('/auth/forgot-password')}
                             className="text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors"
                         >
@@ -107,7 +106,8 @@ const SignIn: React.FC = () => {
                 <button
                     type="submit"
                     disabled={loginMutation.isPending || googleMutation.isPending}
-                    className="w-full py-3 px-4 bg-gray-900 text-white font-semibold rounded-xl shadow-lg hover:bg-gray-800 focus:ring-4 focus:ring-gray-200 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                    // ▼▼▼ FIX: Restored Brand Color (Teal) ▼▼▼
+                    className="w-full py-3 px-4 bg-teal-600 text-white font-semibold rounded-xl shadow-lg hover:bg-teal-700 focus:ring-4 focus:ring-teal-200 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     {loginMutation.isPending || googleMutation.isPending ? 'Signing in...' : 'Sign In'}
                 </button>
@@ -141,7 +141,6 @@ const SignIn: React.FC = () => {
                     Don't have an account?{' '}
                     <button
                         type="button"
-                        // ▼▼▼ FIX: Soft Navigation ▼▼▼
                         onClick={() => navigate('/auth/signup')}
                         className="font-semibold text-teal-600 hover:text-teal-700 transition-colors"
                     >

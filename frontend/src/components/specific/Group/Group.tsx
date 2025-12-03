@@ -45,7 +45,6 @@ const Group: React.FC<GroupProps> = ({
 
     const hasKeywords = group.keywords.length > 0;
 
-    // 1. Interactive Buttons
     const collapsibleActions = readOnly ? null : (
         <>
             <button className={styles.actionButton} onClick={onEnrich} disabled={isEnriching}>
@@ -54,15 +53,13 @@ const Group: React.FC<GroupProps> = ({
             <button
                 className={styles.actionButton}
                 onClick={onRunAnalysis}
-                disabled={!hasKeywords} // Disabled if empty
-                title={!hasKeywords ? "Add keywords to analyze" : undefined}
+                disabled={!hasKeywords}
             >
                 Run Analysis
             </button>
         </>
     );
 
-    // 2. Status Indicator
     const statusIndicator = isEnriching ? (
         <div className="flex items-center text-teal-600" title="Enriching in progress...">
             <HiRefresh className="animate-spin" size={18} />
@@ -84,7 +81,7 @@ const Group: React.FC<GroupProps> = ({
             statusIndicator={statusIndicator}
         >
             <KeywordList
-                keywords={group.keywords}
+                keywords={group.keywords} // Correctly passed as Keyword[]
                 onSave={onKeywordSave}
                 onCopy={onKeywordCopy}
                 onEdit={onKeywordEdit}

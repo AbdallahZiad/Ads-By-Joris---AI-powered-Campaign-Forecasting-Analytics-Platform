@@ -17,9 +17,15 @@ export const useKeywordAnalysis = (
 
     useEffect(() => {
         const allKeywords = new Set<string>();
+
+        // ▼▼▼ FIX: Handle Keyword Objects vs Strings ▼▼▼
         selection.forEach(cat =>
             cat.groups.forEach(grp =>
-                grp.keywords.forEach(k => allKeywords.add(k))
+                grp.keywords.forEach(k => {
+                    // Check if it's an object (new structure) or string (legacy/scan)
+                    const text = typeof k === 'string' ? k : k.text;
+                    allKeywords.add(text);
+                })
             )
         );
         const keywordList = Array.from(allKeywords);
@@ -29,16 +35,14 @@ export const useKeywordAnalysis = (
         const runAnalysisPipeline = async () => {
             console.log("HOOK: Starting Analysis Pipeline...", { count: keywordList.length, countryId, languageId });
 
-            // --- STEP 1: HISTORY (Context-Aware Cache + API) ---
+            // --- STEP 1: HISTORY ---
             setLoadingState(prev => ({ ...prev, history: true }));
 
-            // Map to hold the final set of history (Cached + Fetched)
-            // Key: Normalized keyword string (used for UI lookups)
             const currentSessionHistoryMap = new Map<string, UnifiedKeywordResult>();
             const validHistoryForNextStep: UnifiedKeywordResult[] = [];
 
             try {
-                // A. Retrieve Valid Cached Items
+                // A. Retrieve Cached
                 keywordList.forEach(k => {
                     const cachedMetrics = HistoryCache.get(k, countryId, languageId);
                     if (cachedMetrics) {
@@ -48,10 +52,9 @@ export const useKeywordAnalysis = (
                     }
                 });
 
-                // B. Identify Missing (Context Specific)
+                // B. Fetch Missing
                 const missingForHistory = HistoryCache.getMissing(keywordList, countryId, languageId);
 
-                // C. Fetch Missing
                 if (missingForHistory.length > 0) {
                     const response = await fetchHistory({
                         keywords: missingForHistory,
@@ -59,10 +62,8 @@ export const useKeywordAnalysis = (
                         countryId
                     });
 
-                    // Cache the new results using the helper
                     cacheHistoryBatch(response.results, countryId, languageId);
 
-                    // Add to current session map
                     response.results.forEach(r => {
                         currentSessionHistoryMap.set(normalize(r.text), r);
                         validHistoryForNextStep.push(r);
@@ -78,35 +79,28 @@ export const useKeywordAnalysis = (
                 return;
             }
 
-            // --- STEP 2: FORECAST (Context-Aware Cache + API) ---
+            // --- STEP 2: FORECAST ---
             setLoadingState(prev => ({ ...prev, forecast: true }));
 
             try {
                 const currentSessionForecastMap = new Map<string, KeywordForecast>();
-
-                // A. Retrieve Cached Forecasts
                 const keywordsNeedingForecast: UnifiedKeywordResult[] = [];
 
                 validHistoryForNextStep.forEach(historyItem => {
-                    // Check if we already have a forecast for this specific context
                     const cachedForecast = ForecastCache.get(historyItem.text, countryId, languageId);
 
                     if (cachedForecast) {
                         currentSessionForecastMap.set(normalize(historyItem.text), cachedForecast);
                     } else if (historyItem.keyword_metrics !== null) {
-                        // Only fetch if history exists AND forecast is missing
                         keywordsNeedingForecast.push(historyItem);
                     }
                 });
 
-                // B. Fetch Missing Forecasts
                 if (keywordsNeedingForecast.length > 0) {
                     const forecastResponse = await fetchForecast(keywordsNeedingForecast);
 
                     forecastResponse.forecasts.forEach(fc => {
-                        // Cache the new forecast
                         ForecastCache.set(fc.keyword, countryId, languageId, fc);
-                        // Add to current UI state
                         currentSessionForecastMap.set(normalize(fc.keyword), fc);
                     });
                 }
@@ -124,7 +118,7 @@ export const useKeywordAnalysis = (
 
     }, [selection, countryId, languageId, fetchHistory, fetchForecast]);
 
-    // The "Inflator" - Maps data back to the UI structure
+    // The "Inflator"
     const analyzedCategories: AnalyzedCategory[] = useMemo(() => {
         return selection.map(cat => ({
             id: cat.id,
@@ -133,7 +127,9 @@ export const useKeywordAnalysis = (
                 id: grp.id,
                 name: grp.name,
                 keywords: grp.keywords.map(k => {
-                    const kNorm = normalize(k);
+                    // ▼▼▼ FIX: Handle Object Property Access ▼▼▼
+                    const text = typeof k === 'string' ? k : k.text;
+                    const kNorm = normalize(text);
 
                     const historyResult = historyData.get(kNorm);
                     const historyEntry = loadingState.history
@@ -145,7 +141,7 @@ export const useKeywordAnalysis = (
                         : (forecastData.get(kNorm) || null);
 
                     return {
-                        text: k,
+                        text: text,
                         history: historyEntry,
                         forecast: forecastEntry
                     } as AnalyzedKeyword;

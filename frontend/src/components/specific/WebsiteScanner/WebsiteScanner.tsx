@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiCheck } from 'react-icons/hi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import styles from './WebsiteScanner.module.css';
-import { ScannerConfig, ScannerResponse, Category } from '../../../types';
+import { ScannerConfig, ScannerResponse, Category, CreateProjectTreePayload } from '../../../types';
 import { useScanner } from '../../../hooks/useScanner';
 import { useProject } from '../../../contexts/ProjectContext';
+import { projectService } from '../../../api/services/projectService';
 
 import ScannerHero from './components/ScannerHero';
 import ScannerConfigForm from './components/ScannerConfigForm';
@@ -15,7 +17,13 @@ import PageLayout from '../../common/PageLayout/PageLayout';
 
 const WebsiteScanner: React.FC = () => {
     const navigate = useNavigate();
-    const { setImportedCategories } = useProject();
+    const location = useLocation();
+    const queryClient = useQueryClient();
+    const { setCurrentProjectId } = useProject();
+
+    // Check if we are here to replace an empty project
+    const replaceProjectId = location.state?.replaceProjectId;
+    const replaceProjectTitle = location.state?.replaceProjectTitle; // ▼▼▼ GET TITLE
 
     const [config, setConfig] = useState<ScannerConfig>({
         start_url: '',
@@ -31,7 +39,29 @@ const WebsiteScanner: React.FC = () => {
     const [scanResult, setScanResult] = useState<ScannerResponse | null>(null);
     const [showStats, setShowStats] = useState(false);
 
-    // Helper to normalize URL (auto-prepend https)
+    // Mutation for saving the project
+    const saveProjectMutation = useMutation({
+        mutationFn: projectService.createProjectTree,
+        onSuccess: async (newProject) => {
+            // 1. If we are replacing an old empty project, delete it now
+            if (replaceProjectId) {
+                try {
+                    await projectService.deleteProject(replaceProjectId);
+                } catch (e) {
+                    console.warn("Failed to clean up old project during replacement", e);
+                }
+            }
+
+            await queryClient.invalidateQueries({ queryKey: ['projects-list'] });
+            setCurrentProjectId(newProject.id);
+            navigate('/planner');
+        },
+        onError: (err) => {
+            console.error("Failed to save project tree", err);
+            alert("Failed to save project. Please try again.");
+        }
+    });
+
     const normalizeUrl = (input: string): string => {
         let url = input.trim();
         if (url && !/^https?:\/\//i.test(url)) {
@@ -40,29 +70,15 @@ const WebsiteScanner: React.FC = () => {
         return url;
     };
 
-    // ▼▼▼ IMPROVED: Strict Validity Check ▼▼▼
     const checkUrlValidity = (input: string): boolean => {
         if (!input) return false;
         try {
             const urlStr = normalizeUrl(input);
             const url = new URL(urlStr);
-
-            // 1. Must contain a hostname
             if (!url.hostname) return false;
-
-            // 2. STRICT CHECK: Must have a TLD (contain a dot) OR be localhost
-            // This blocks "test", "mysite", etc., but allows "google.com" or "localhost"
-            if (url.hostname !== 'localhost' && !url.hostname.includes('.')) {
-                return false;
-            }
-
-            // 3. Basic TLD check (last part must be at least 2 chars)
-            // e.g. prevents "google.c" if user stopped typing
+            if (url.hostname !== 'localhost' && !url.hostname.includes('.')) return false;
             const parts = url.hostname.split('.');
-            if (parts.length > 1 && parts[parts.length - 1].length < 2) {
-                return false;
-            }
-
+            if (parts.length > 1 && parts[parts.length - 1].length < 2) return false;
             return true;
         } catch (e) {
             return false;
@@ -71,8 +87,6 @@ const WebsiteScanner: React.FC = () => {
 
     const handleScan = async () => {
         const urlToScan = normalizeUrl(config.start_url);
-
-        // Run the strict check before proceeding
         if (!checkUrlValidity(config.start_url)) {
             setUrlError("Please enter a valid domain (e.g. example.com)");
             return;
@@ -91,18 +105,29 @@ const WebsiteScanner: React.FC = () => {
 
     const handleAccept = () => {
         if (!scanResult) return;
-        const newCategories: Category[] = scanResult.structured_data.map((rawCat, index) => ({
-            id: `scan_c_${Date.now()}_${index}`,
-            name: rawCat.category_name,
-            groups: rawCat.groups.map((rawGrp, gIndex) => ({
-                id: `scan_g_${Date.now()}_${index}_${gIndex}`,
-                name: rawGrp.group_name,
-                keywords: rawGrp.keywords
-            }))
-        }));
 
-        setImportedCategories(newCategories);
-        navigate('/planner');
+        let projectTitle = replaceProjectTitle;
+
+        // Only generate new title if we aren't replacing an existing one
+        if (!projectTitle) {
+            let titleDomain = config.start_url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+            if (titleDomain.includes('/')) titleDomain = titleDomain.split('/')[0];
+            const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            projectTitle = `${titleDomain} Scan (${dateStr})`;
+        }
+
+        const payload: CreateProjectTreePayload = {
+            title: projectTitle,
+            categories: scanResult.structured_data.map(c => ({
+                name: c.category_name,
+                groups: c.groups.map(g => ({
+                    name: g.group_name,
+                    keywords: g.keywords
+                }))
+            }))
+        };
+
+        saveProjectMutation.mutate(payload);
     };
 
     const handleReset = () => {
@@ -110,7 +135,6 @@ const WebsiteScanner: React.FC = () => {
     };
 
     const handleConfigChange = (newConfig: ScannerConfig) => {
-        // Clear error as user types to be friendly
         if (urlError && newConfig.start_url !== config.start_url) {
             setUrlError(null);
         }
@@ -183,7 +207,10 @@ const WebsiteScanner: React.FC = () => {
                                         groups: rawCat.groups.map((g, j) => ({
                                             id: `preview_g_${i}_${j}`,
                                             name: g.group_name,
-                                            keywords: g.keywords
+                                            keywords: g.keywords.map((k, kIdx) => ({
+                                                id: `preview_k_${i}_${j}_${kIdx}`,
+                                                text: k
+                                            }))
                                         }))
                                     };
 
@@ -220,9 +247,19 @@ const WebsiteScanner: React.FC = () => {
                                 <button className={styles.cancelButton} onClick={handleReset}>
                                     Discard & Rescan
                                 </button>
-                                <button className={styles.acceptButton} onClick={handleAccept}>
-                                    <HiCheck className="inline mr-1" size={16} />
-                                    Import Hierarchy
+                                <button
+                                    className={styles.acceptButton}
+                                    onClick={handleAccept}
+                                    disabled={saveProjectMutation.isPending}
+                                >
+                                    {saveProjectMutation.isPending ? (
+                                        <span className="animate-pulse">Saving Project...</span>
+                                    ) : (
+                                        <>
+                                            <HiCheck className="inline mr-1" size={16} />
+                                            Import Hierarchy
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </motion.div>

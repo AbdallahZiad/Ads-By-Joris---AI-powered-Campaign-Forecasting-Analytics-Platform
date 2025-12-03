@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { Category, Group } from '../../../../types';
-import { cacheHistoryBatch } from '../../../../utils/cacheService'; // Updated Import
+import { Group } from '../../../../types'; // Ensure Group is imported from the fixed types.ts
+import { cacheHistoryBatch } from '../../../../utils/cacheService';
 import { useEnrichment } from '../../../../hooks/useEnrichment';
 
 interface Props {
     countryId?: string;
     languageId?: string;
-    setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
+    onBulkAdd: (vars: { groupId: string, keywords: string[] }) => Promise<any>;
     setSelectedKeywordsByGroup: React.Dispatch<React.SetStateAction<Map<string, Set<string>>>>;
+    setCategories?: any;
 }
 
-export const useCategoryEnrichment = ({ countryId, languageId, setCategories, setSelectedKeywordsByGroup }: Props) => {
+export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSelectedKeywordsByGroup }: Props) => {
     const [enrichingGroupIds, setEnrichingGroupIds] = useState<Set<string>>(new Set());
     const [newKeywordsByGroup, setNewKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
 
@@ -29,7 +30,10 @@ export const useCategoryEnrichment = ({ countryId, languageId, setCategories, se
         setEnrichingGroupIds(prev => new Set(prev).add(group.id));
 
         try {
-            const seedKeywords = group.keywords.length > 0 ? group.keywords : [group.name];
+            // Map objects to strings for the API call
+            const seedKeywords = group.keywords.length > 0
+                ? group.keywords.map(k => k.text)
+                : [group.name];
 
             const response = await enrichKeywordsApi({
                 keywords: seedKeywords,
@@ -37,30 +41,32 @@ export const useCategoryEnrichment = ({ countryId, languageId, setCategories, se
                 countryId
             });
 
-            // ▼▼▼ UPDATED: Use context-aware batch caching ▼▼▼
             cacheHistoryBatch(response.results, countryId, languageId);
 
-            const oldKeywordsSet = new Set(group.keywords);
+            // Create a set of existing keyword TEXTs
+            const oldKeywordsSet = new Set(group.keywords.map(k => k.text));
             const allResultKeywords = response.results.map(r => r.text);
+
             const newlyAddedSet = new Set<string>();
+            const keywordsToAdd: string[] = [];
 
             allResultKeywords.forEach(k => {
-                if (!oldKeywordsSet.has(k)) newlyAddedSet.add(k);
+                if (!oldKeywordsSet.has(k)) {
+                    newlyAddedSet.add(k);
+                    keywordsToAdd.push(k);
+                }
             });
 
-            setCategories(prev => prev.map(cat => ({
-                ...cat,
-                groups: cat.groups.map(g => {
-                    if (g.id === group.id) {
-                        return { ...g, keywords: allResultKeywords };
-                    }
-                    return g;
-                })
-            })));
+            if (keywordsToAdd.length > 0) {
+                // Optimistically add to project
+                await onBulkAdd({ groupId: group.id, keywords: keywordsToAdd });
+            }
 
             setNewKeywordsByGroup(prev => {
                 const next = new Map(prev);
-                next.set(group.id, newlyAddedSet);
+                const existing = next.get(group.id) || new Set();
+                newlyAddedSet.forEach(k => existing.add(k));
+                next.set(group.id, existing);
                 return next;
             });
 

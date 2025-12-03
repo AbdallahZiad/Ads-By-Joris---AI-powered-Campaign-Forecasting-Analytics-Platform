@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HiOutlinePencil, HiOutlineCheck, HiOutlineClipboardCopy, HiRefresh } from 'react-icons/hi';
 import styles from './KeywordList.module.css';
+import { Keyword } from '../../../types'; // Import the object type
 
 interface KeywordListProps {
-    keywords: string[];
+    keywords: Keyword[]; // ▼▼▼ Changed from string[] to Keyword[]
     onSave: (newKeywords: string[]) => void;
     onCopy: (keywordsText: string) => void;
     onEdit?: () => void;
@@ -13,7 +14,6 @@ interface KeywordListProps {
     selectedKeywords?: Set<string>;
     onKeywordSelect?: (keyword: string, isSelected: boolean) => void;
     readOnly?: boolean;
-    // ▼▼▼ NEW PROPS ▼▼▼
     isEnriching?: boolean;
     newKeywords?: Set<string>;
 }
@@ -35,9 +35,9 @@ const KeywordList: React.FC<KeywordListProps> = ({
     const [isEditing, setIsEditing] = useState(initialEditMode);
     const [currentKeywordsText, setCurrentKeywordsText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const copyButtonRef = useRef<HTMLButtonElement>(null);
 
-    const keywordsString = keywords.join('\n');
+    // Convert objects to string for editing/copying
+    const keywordsString = keywords.map(k => k.text).join('\n');
 
     useEffect(() => {
         setCurrentKeywordsText(keywordsString);
@@ -56,11 +56,11 @@ const KeywordList: React.FC<KeywordListProps> = ({
     };
 
     const handleSaveClick = () => {
-        const newKeywords = currentKeywordsText
+        const newLines = currentKeywordsText
             .split('\n')
             .map((line) => line.trim())
             .filter((line) => line.length > 0);
-        onSave(newKeywords);
+        onSave(newLines);
         setIsEditing(false);
     };
 
@@ -68,10 +68,6 @@ const KeywordList: React.FC<KeywordListProps> = ({
         navigator.clipboard.writeText(keywordsString)
             .then(() => onCopy(keywordsString))
             .catch((err) => console.error('Failed to copy keywords: ', err));
-    };
-
-    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setCurrentKeywordsText(e.target.value);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -83,7 +79,6 @@ const KeywordList: React.FC<KeywordListProps> = ({
 
     return (
         <div className={`${styles.container} ${showBorder ? styles.withBorder : ''}`}>
-            {/* ▼▼▼ ENRICHMENT LOADING OVERLAY ▼▼▼ */}
             {isEnriching && (
                 <div className={styles.loadingOverlay}>
                     <div className={styles.loadingContent}>
@@ -97,13 +92,11 @@ const KeywordList: React.FC<KeywordListProps> = ({
                 <div className={styles.actions}>
                     {!isEditing ? (
                         <button
-                            ref={copyButtonRef}
                             className={styles.actionButton}
                             onClick={handleCopyClick}
                             aria-label="Copy keywords to clipboard"
                         >
                             <HiOutlineClipboardCopy size={20} />
-                            <span className="sr-only">Copy</span>
                         </button>
                     ) : null}
 
@@ -112,10 +105,8 @@ const KeywordList: React.FC<KeywordListProps> = ({
                             className={styles.actionButton}
                             onClick={isEditing ? handleSaveClick : handleEditClick}
                             disabled={isEnriching}
-                            aria-label={isEditing ? "Save changes" : "Edit keywords"}
                         >
                             {isEditing ? <HiOutlineCheck size={20} /> : <HiOutlinePencil size={20} />}
-                            <span className="sr-only">{isEditing ? "Save" : "Edit"}</span>
                         </button>
                     )}
                 </div>
@@ -125,40 +116,37 @@ const KeywordList: React.FC<KeywordListProps> = ({
                         ref={textareaRef}
                         className={`${styles.textBlock} ${styles.textarea}`}
                         value={currentKeywordsText}
-                        onChange={handleTextareaChange}
+                        onChange={(e) => setCurrentKeywordsText(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        aria-label="Edit keywords, one per line"
                         placeholder="Enter keywords, one per line..."
                     />
                 ) : (
                     <div
                         className={`${styles.textBlock} ${styles.keywordListContainer}`}
                         onDoubleClick={!readOnly && !isEnriching ? handleEditClick : undefined}
-                        title={!readOnly ? "Double-click to edit" : undefined}
                         style={{ cursor: readOnly || isEnriching ? 'default' : 'pointer' }}
                     >
                         {keywords.length > 0 ? (
-                            keywords.map((keyword, index) => {
-                                // ▼▼▼ NEW KEYWORD HIGHLIGHT LOGIC ▼▼▼
-                                const isNew = newKeywords.has(keyword);
+                            keywords.map((kwObj) => {
+                                // ▼▼▼ FIX: Access .text property instead of rendering object ▼▼▼
+                                const isNew = newKeywords.has(kwObj.text);
 
                                 return (
                                     <div
-                                        key={`${keyword}-${index}`}
+                                        key={kwObj.id} // Use ID for key
                                         className={`${styles.keywordItem} ${isNew ? styles.newKeyword : ''}`}
                                     >
                                         {selectable && !readOnly && (
                                             <input
                                                 type="checkbox"
                                                 className={styles.keywordCheckbox}
-                                                checked={selectedKeywords.has(keyword)}
+                                                checked={selectedKeywords.has(kwObj.text)}
                                                 onClick={(e) => e.stopPropagation()}
-                                                onChange={(e) => onKeywordSelect?.(keyword, e.target.checked)}
+                                                onChange={(e) => onKeywordSelect?.(kwObj.text, e.target.checked)}
                                             />
                                         )}
                                         <label className={styles.keywordLabel} style={{ cursor: readOnly ? 'text' : 'pointer' }}>
-                                            {keyword}
-                                            {/* Optional Badge */}
+                                            {kwObj.text}
                                             {isNew && <span className={styles.newBadge}>New</span>}
                                         </label>
                                     </div>

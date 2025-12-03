@@ -1,7 +1,16 @@
+// --- Domain Entities ---
+
+export interface Keyword {
+    id: string;
+    text: string;
+    isNew?: boolean;
+}
+
 export interface Group {
     id: string;
     name: string;
-    keywords: string[];
+    keywords: Keyword[];
+    google_ad_group_id?: string | null;
 }
 
 export interface Category {
@@ -10,10 +19,45 @@ export interface Category {
     groups: Group[];
 }
 
+export interface ProjectMetadata {
+    id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+    categories_count?: number;
+}
+
+export interface Project extends ProjectMetadata {
+    categories: Category[];
+}
+
+// --- API Payloads ---
+
+export interface CreateProjectPayload { title: string; }
+export interface UpdateProjectPayload { title: string; }
+export interface CreateCategoryPayload { name: string; }
+export interface UpdateCategoryPayload { name: string; }
+export interface CreateGroupPayload { name: string; }
+export interface UpdateGroupPayload { name?: string; google_ad_group_id?: string; }
+export interface CreateKeywordPayload { text: string; }
+export interface BulkCreateKeywordsPayload { keywords: string[]; }
+
+// ▼▼▼ NEW: Atomic Tree Creation Payload ▼▼▼
+export interface CreateProjectTreePayload {
+    title: string;
+    categories: {
+        name: string;
+        groups: {
+            name: string;
+            keywords: string[];
+        }[];
+    }[];
+}
+
+// --- Analysis Types ---
 export type CompetitionLevel = "UNSPECIFIED" | "UNKNOWN" | "LOW" | "MEDIUM" | "HIGH";
 export type Month = "UNSPECIFIED" | "JANUARY" | "FEBRUARY" | "MARCH" | "APRIL" | "MAY" | "JUNE" | "JULY" | "AUGUST" | "SEPTEMBER" | "OCTOBER" | "NOVEMBER" | "DECEMBER";
 
-// --- History API Types ---
 export interface MonthlySearchVolume {
     month: Month;
     year: number;
@@ -58,14 +102,12 @@ export interface ForecastResponse {
     forecasts: KeywordForecast[];
 }
 
-
 export interface GoogleAdsKeywordResponse {
     results: UnifiedKeywordResult[];
 }
 
 export interface AnalyzedKeyword {
     text: string;
-    // undefined = loading, null = not found, object = loaded
     history: KeywordHistoricalMetrics | null | undefined;
     forecast: KeywordForecast | null | undefined;
 }

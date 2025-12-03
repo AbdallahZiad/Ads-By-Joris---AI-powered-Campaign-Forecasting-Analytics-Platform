@@ -1,4 +1,5 @@
-const BASE_URL = 'http://127.0.0.1:8000'; // Updated to your provided backend URL
+// Ideally, this comes from an environment variable like import.meta.env.VITE_API_URL
+const BASE_URL = 'http://127.0.0.1:8000';
 
 export const apiClient = {
     getToken: (): string | null => localStorage.getItem('accessToken'),
@@ -28,6 +29,11 @@ export const apiClient = {
             throw new Error(errorData.detail || `API Error: ${response.statusText}`);
         }
 
+        // Handle 204 No Content
+        if (response.status === 204) {
+            return {} as T;
+        }
+
         return response.json();
     },
 
@@ -45,6 +51,14 @@ export const apiClient = {
     put: async <T>(endpoint: string, body: any): Promise<T> => {
         return apiClient.request<T>(endpoint, {
             method: 'PUT',
+            body: JSON.stringify(body),
+        });
+    },
+
+    // ▼▼▼ NEW: PATCH Method ▼▼▼
+    patch: async <T>(endpoint: string, body: any): Promise<T> => {
+        return apiClient.request<T>(endpoint, {
+            method: 'PATCH',
             body: JSON.stringify(body),
         });
     },

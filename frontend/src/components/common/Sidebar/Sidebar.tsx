@@ -44,7 +44,6 @@ const NavLink: React.FC<NavLinkProps> = ({ icon, label, active = false, disabled
 
             <span className={`${styles.iconWrapper} ${active ? styles.navButtonActiveText : ''} relative`}>
                 {icon}
-                {/* Indicator Positioned on the Shoulder */}
                 {indicator && (
                     <div className="absolute -top-1 -right-1 z-10">
                         {indicator}
@@ -58,12 +57,12 @@ const NavLink: React.FC<NavLinkProps> = ({ icon, label, active = false, disabled
 interface SidebarProps {
     viewMode: ViewMode | 'none';
     onNavigate: (mode: ViewMode) => void;
-    hasScannedData: boolean;
+    // Removed hasScannedData
     hasAnalysisData: boolean;
     onAuthClick: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData, hasAnalysisData, onAuthClick }) => {
+const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasAnalysisData, onAuthClick }) => {
     const { user, isAuthenticated, logout } = useAuth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -106,7 +105,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData,
                     icon={<HiOutlineCollection size={22} />}
                     label="Category Planner"
                     active={viewMode === 'management'}
-                    disabled={!hasScannedData}
+                    disabled={false} // Always open
                     onClick={() => onNavigate('management')}
                 />
                 <NavLink
@@ -117,14 +116,12 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasScannedData,
                     onClick={() => onNavigate('analysis')}
                 />
 
-                {/* ▼▼▼ GOOGLE BUTTON ▼▼▼ */}
                 <NavLink
                     icon={<AiOutlineGoogle size={22} />}
                     label={isAdsLinked ? "Google Ads Linked" : "Link Google Ads"}
                     active={viewMode === 'google-ads'}
                     disabled={false}
                     onClick={handleGoogleAdsClick}
-                    // FIX: Changed border-2 to border (1px) to stop the "blob" look
                     indicator={isAdsLinked ? (
                         <div className="flex items-center justify-center w-2.5 h-2.5 bg-green-500 rounded-full border border-white shadow-sm">
                             <HiCheck className="text-white" size={6} strokeWidth={4} />

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query'; // ▼▼▼ Import QueryClient
 import { User, TokenResponse } from '../types';
 import { apiClient } from '../api/apiClient';
 import { authService } from '../api/services/authService';
@@ -18,13 +19,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // ▼▼▼ Access the global cache ▼▼▼
+    const queryClient = useQueryClient();
+
     const refreshUser = async () => {
         try {
             const userData = await authService.getMe();
             setUser(userData);
         } catch (error) {
             console.error("Failed to fetch user profile", error);
-            logout(); // Invalid token? Log out.
+            logout();
         }
     };
 
@@ -41,13 +45,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const login = (tokenData: TokenResponse) => {
         localStorage.setItem('accessToken', tokenData.access_token);
-        // After setting token, fetch user details
         refreshUser();
     };
 
     const logout = () => {
+        // 1. Clear Token
         localStorage.removeItem('accessToken');
+
+        // 2. Clear User State
         setUser(null);
+
+        // 3. ▼▼▼ SECURITY: Wipe all cached data (Projects, Keywords, etc.) ▼▼▼
+        // This ensures the next user doesn't see a millisecond of the old user's data
+        queryClient.removeQueries();
+        // Also clear mutation state to be safe
+        queryClient.clear();
     };
 
     return (
