@@ -10,10 +10,10 @@ from dateutil.relativedelta import relativedelta
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 from google.api_core.exceptions import ResourceExhausted
-from app.schemas.google_ads_schemas import GoogleAdsCredentials, GoogleAdsTargeting, GoogleAdsKeywordResponse
+from app.schemas.google_ads_data_schemas import GoogleAdsCredentials, GoogleAdsTargeting, GoogleAdsKeywordResponse
 
 
-class GoogleAdsService:
+class GoogleAdsDataService:
     """
     Centralized service class for interacting with the Google Ads API.
     Handles client initialization and provides methods for specific API calls.
@@ -332,7 +332,7 @@ class GoogleAdsService:
 
 
 async def main_test():
-    service = GoogleAdsService()
+    service = GoogleAdsDataService()
 
     # Define the keywords to analyze
     keywords_to_query = ['samsung galaxy s24', 'apple iphone 15 pro max']

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Login Test</title>
+</head>
+<body>
+<h2>Google Login Test (Port 8080)</h2>
+<div id="buttonDiv"></div>
+
+<h3>Your ID Token:</h3>
+<p>Copy the text below and paste it into Swagger UI (/api/v1/login/google)</p>
+<textarea id="token_area" rows="8" cols="100"></textarea>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+    function handleCredentialResponse(response) {
+        console.log("Encoded JWT ID token: " + response.credential);
+        document.getElementById("token_area").value = response.credential;
+        alert("Success! Token received.");
+    }
+
+    window.onload = function () {
+        google.accounts.id.initialize({
+            // I pulled this Client ID from your python script
+            client_id: "507845882812-avft4url75cfrvuiipsusc8bg8a8b3q2.apps.googleusercontent.com",
+            callback: handleCredentialResponse
+        });
+        google.accounts.id.renderButton(
+            document.getElementById("buttonDiv"),
+            { theme: "outline", size: "large" }
+        );
+        google.accounts.id.prompt();
+    }
+</script>
+</body>
+</html>

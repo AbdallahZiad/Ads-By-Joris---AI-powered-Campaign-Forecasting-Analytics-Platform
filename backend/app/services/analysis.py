@@ -10,8 +10,8 @@ import numpy as np
 from datetime import datetime
 from prophet import Prophet
 
-from app.services.google_ads import GoogleAdsService
-from app.schemas.google_ads_schemas import GoogleAdsKeywordResponse, UnifiedKeywordResult, KeywordHistoricalMetrics, \
+from app.services.google_ads_data import GoogleAdsDataService
+from app.schemas.google_ads_data_schemas import GoogleAdsKeywordResponse, UnifiedKeywordResult, KeywordHistoricalMetrics, \
     Month, GoogleAdsTargeting
 from app.schemas.analysis_schemas import ForecastResponse, KeywordForecast, ForecastPoint
 
@@ -303,7 +303,7 @@ class KeywordForecastingService:
         return ForecastResponse(forecasts=all_forecasts)
 
 async def main_test():
-    google_ad_service = GoogleAdsService()
+    google_ad_service = GoogleAdsDataService()
     forecasting_service = KeywordForecastingService()
 
     # Define the keywords to analyze

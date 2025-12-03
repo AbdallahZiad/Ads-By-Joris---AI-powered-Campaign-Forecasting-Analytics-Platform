@@ -28,6 +28,9 @@ TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
 def get_current_user(session: SessionDep, token: TokenDep) -> User:
+    """
+    Validates the token, checks if user exists, is active, AND IS VERIFIED.
+    """
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
@@ -43,6 +46,15 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
         raise HTTPException(status_code=404, detail="User not found")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+
+    # --- CRITICAL SECURITY CHECK ---
+    # Unverified users cannot access any protected endpoints.
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified. Please verify your email to access this resource."
+        )
+
     return user
 
 

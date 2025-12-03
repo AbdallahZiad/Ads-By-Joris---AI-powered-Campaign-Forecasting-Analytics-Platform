@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from app.services.google_ads import GoogleAdsService
-from app.schemas.google_ads_schemas import (
+from app.services.google_ads_data import GoogleAdsDataService
+from app.schemas.google_ads_data_schemas import (
     GoogleAdsKeywordResponse, GetKeywordsMetricsInput, EnrichKeywordsInput
 )
 
@@ -20,7 +20,7 @@ async def get_historical_metrics(
     for the exact list of keywords provided in the request body.
     """
     # The service automatically loads credentials from settings in __init__
-    service = GoogleAdsService(targeting=input_data.targeting)
+    service = GoogleAdsDataService(targeting=input_data.targeting)
     response = await service.get_keywords_historical_metrics(
         keywords=input_data.keywords,
         years_of_history=input_data.years_of_history
@@ -41,7 +41,7 @@ async def enrich_keywords_with_ideas(
     Uses the provided keywords as seeds to generate new, related keyword ideas,
     and returns historical metrics for all generated keywords (seeds + ideas).
     """
-    service = GoogleAdsService(targeting=input_data.targeting)
+    service = GoogleAdsDataService(targeting=input_data.targeting)
 
     response = await service.enrich_keywords_using_ideas(
         seed_keywords=input_data.keywords,

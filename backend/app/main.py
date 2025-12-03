@@ -2,6 +2,7 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from app.api.main import api_router
 from app.core.config import settings
@@ -31,3 +32,26 @@ if settings.all_cors_origins:
     )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# --- CUSTOM OPENAPI SCHEMA TO FIX OAUTH2 CONFUSION ---
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.PROJECT_NAME,
+        version="0.1.0",
+        description="Ads By Joris API",
+        routes=app.routes,
+    )
+
+    # Inject a description into the Security Scheme to clarify 'username' = 'email'
+    if "components" in openapi_schema and "securitySchemes" in openapi_schema["components"]:
+        for scheme_name, scheme in openapi_schema["components"]["securitySchemes"].items():
+            if scheme["type"] == "oauth2":
+                scheme["description"] = "<strong>NOTE:</strong> For the 'username' field, please enter your <strong>EMAIL ADDRESS</strong>."
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
