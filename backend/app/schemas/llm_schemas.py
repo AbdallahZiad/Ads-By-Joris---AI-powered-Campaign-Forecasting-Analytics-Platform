@@ -1,7 +1,7 @@
 from enum import Enum
 
 from pydantic import BaseModel, Field, RootModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 # --- Extraction Outputs ---
@@ -50,12 +50,26 @@ class FinalKeywordHierarchy(BaseModel):
     groups: List[KeywordGroup]
 
 
+# --- Auto-Linking Outputs (NEW) ---
+
+class AutoLinkMatchResult(BaseModel):
+    """
+    The output from the Auto-Link LLM Prompt.
+    Maps internal Source IDs to external Target IDs.
+    """
+    matches: Dict[str, Optional[str]] = Field(
+        ...,
+        description="Dictionary where Key is the Source ID (UUID) and Value is the Target Google ID (or null)."
+    )
+
+
 # --- Final Pipeline Result Metrics ---
 class Phase(Enum):
     KEYWORD_EXTRACTION = "keyword_extraction"
     CATEGORY_GENERATION = "category_generation"
     KEYWORD_CATEGORIZATION = "keyword_categorization"
     KEYWORD_GROUPING = "keyword_grouping"
+    AUTO_LINKING = "auto_linking" # New Phase
 
 class PhaseMetrics(BaseModel):
     """Metrics for a single phase of the pipeline."""

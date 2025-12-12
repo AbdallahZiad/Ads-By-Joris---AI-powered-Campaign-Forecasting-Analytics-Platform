@@ -4,13 +4,15 @@ import time
 from typing import List, Tuple
 
 from app.services.web_crawler import CrawlConfig, CrawlStats, WebCrawlerService
-from app.services.llm import LLMService, LLMResult, LLMTokenMetrics, PhaseMetrics
+from app.services.llm_aiscan import AIScanLLMService
+# FIX: Import schemas from the correct location
+from app.schemas.llm_schemas import LLMResult, LLMTokenMetrics, PhaseMetrics
 
 
 class AIScanService:
     """
     Orchestrates the complete AI Website Scan pipeline by chaining the
-    WebCrawlerService and the LLMService.
+    WebCrawlerService and the AIScanLLMService.
 
     This service provides a unified entry point to fetch raw content and immediately
     process it through the multistep keyword hierarchy generation pipeline.
@@ -36,7 +38,7 @@ class AIScanService:
         """Runs the LLM keyword processing pipeline on the crawled text."""
         print("--- 2. LLM KEYWORD PIPELINE (Processing) ---")
 
-        llm_service = LLMService()
+        llm_service = AIScanLLMService()
 
         # Combine all snippets into one large text blob for processing
         full_text_content = "\n".join(raw_text_snippets)

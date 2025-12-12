@@ -1,0 +1,32 @@
+You are an expert Ad Account Manager. Your task is to semantically match internal project items (Source) to existing Google Ads entities (Target).
+
+I will provide two lists:
+1. **SOURCE ITEMS** (Internal App Categories or Groups)
+2. **TARGET ITEMS** (Live Google Ads Campaigns or Ad Groups)
+
+### Rules:
+1.  **Semantic Matching:** Ignore noise like dates, status tags (e.g., "[Enabled]", "2024-Q1"), or internal IDs in the Target names. Focus on the core product/service intent.
+2.  **Strictness:** Only link if there is a **clear, logical match**. If a Source item has no relevant Target, return `null` for it. Do not force weak matches.
+3.  **One-to-One:** A Source item should match to the *single best* Target item.
+
+### Input Data:
+---
+SOURCE ITEMS:
+{source_items}
+---
+TARGET ITEMS:
+{target_items}
+---
+
+Return a JSON object where:
+- Keys are the **IDs** of the Source Items.
+- Values are the **IDs** of the best matching Target Item (or null).
+
+JSON SCHEMA EXAMPLE:
+{{
+    "matches": {{
+        "source_uuid_1": "google_id_999",
+        "source_uuid_2": "google_id_888",
+        "source_uuid_3": null
+    }}
+}}

@@ -1,7 +1,8 @@
 import uuid
-from typing import Any
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
+from sqlmodel import select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import (
@@ -15,6 +16,7 @@ from app.schemas.google_ads_user_schemas import (
     LinkGroupAdGroupRequest
 )
 from app.services.google_ads_user import UserGoogleAdsService
+from app.services.llm_autolink import AutoLinkLLMService
 
 # Tag: Google Ads Integration
 router = APIRouter(prefix="/projects", tags=["Google Ads Integration"])
@@ -79,6 +81,101 @@ async def get_project_live_campaigns(
         campaigns = await service.get_campaigns(project.linked_customer_id)
         return CampaignListResponse(campaigns=campaigns)
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{id}/auto-link", response_model=Dict[str, int])
+async def auto_link_project_structure(
+        *,
+        session: SessionDep,
+        current_user: CurrentUser,
+        id: uuid.UUID
+) -> Any:
+    """
+    **AI Auto-Linker:** Uses an LLM to semantically match the Project structure
+    to the Google Ads structure.
+
+    1. Matches Categories -> Campaigns
+    2. Matches Groups -> Ad Groups (Context-aware: only looks in linked Campaign)
+
+    Returns a summary of how many items were linked.
+    """
+    # 1. Validation
+    project = session.get(Project, id)
+    if not project: raise HTTPException(status_code=404, detail="Project not found")
+    if project.owner_id != current_user.id: raise HTTPException(status_code=403, detail="Permission denied")
+    if not project.linked_customer_id: raise HTTPException(status_code=400, detail="Link a Google Customer ID first.")
+
+    stats = {
+        "categories_matched": 0,
+        "groups_matched": 0
+    }
+
+    try:
+        ads_service = UserGoogleAdsService(current_user, login_customer_id=project.linked_customer_id)
+        llm_service = AutoLinkLLMService()
+
+        # --- PHASE 1: Categories <-> Campaigns ---
+
+        # A. Fetch Data
+        google_campaigns = await ads_service.get_campaigns(project.linked_customer_id)
+        app_categories = project.categories
+
+        if not google_campaigns or not app_categories:
+            return stats # Nothing to match
+
+        # B. LLM Match
+        cat_matches = await llm_service.match_items(app_categories, google_campaigns)
+
+        # C. Apply Matches
+        for cat in app_categories:
+            match_id = cat_matches.get(str(cat.id))
+            if match_id:
+                # If changing link, reset children
+                if cat.google_campaign_id != match_id:
+                    for g in cat.groups:
+                        g.google_ad_group_id = None
+                        session.add(g)
+
+                cat.google_campaign_id = match_id
+                session.add(cat)
+                stats["categories_matched"] += 1
+
+        session.commit()
+        session.refresh(project) # Refresh to get updated links for Phase 2
+
+        # --- PHASE 2: Groups <-> Ad Groups (Context Aware) ---
+
+        for category in project.categories:
+            # We can only match groups if the parent category is linked to a campaign
+            if not category.google_campaign_id:
+                continue
+
+            # A. Fetch Data (Scoped to this Campaign)
+            google_ad_groups = await ads_service.get_ad_groups(
+                project.linked_customer_id,
+                category.google_campaign_id
+            )
+            app_groups = category.groups
+
+            if not google_ad_groups or not app_groups:
+                continue
+
+            # B. LLM Match
+            group_matches = await llm_service.match_items(app_groups, google_ad_groups)
+
+            # C. Apply Matches
+            for group in app_groups:
+                match_id = group_matches.get(str(group.id))
+                if match_id:
+                    group.google_ad_group_id = match_id
+                    session.add(group)
+                    stats["groups_matched"] += 1
+
+        session.commit()
+        return stats
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auto-linking failed: {str(e)}")
 
 
 # --- 2. Category Level Linking ---
