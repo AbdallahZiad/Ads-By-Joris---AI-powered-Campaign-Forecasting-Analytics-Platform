@@ -4,22 +4,26 @@ export interface Keyword {
     id: string;
     text: string;
     isNew?: boolean;
+    // ▼▼▼ NEW ▼▼▼
+    applied_labels?: string[];
 }
 
 export interface Group {
     id: string;
     name: string;
     keywords: Keyword[];
-    // Confirmed Field Name
     google_ad_group_id?: string | null;
+    // ▼▼▼ NEW ▼▼▼
+    applied_labels?: string[];
 }
 
 export interface Category {
     id: string;
     name: string;
     groups: Group[];
-    // Confirmed Field Name
     google_campaign_id?: string | null;
+    // ▼▼▼ NEW ▼▼▼
+    applied_labels?: string[];
 }
 
 export interface ProjectMetadata {
@@ -29,7 +33,6 @@ export interface ProjectMetadata {
     updated_at: string;
     categories_count?: number;
     owner_id: string;
-    // ▼▼▼ FIX: Correct Field Name from Backend JSON ▼▼▼
     linked_customer_id?: string | null;
 }
 
@@ -68,6 +71,21 @@ export interface CampaignListResponse {
 
 export interface AdGroupListResponse {
     ad_groups: GoogleAdsAdGroup[];
+}
+
+// --- Labeling Report (New) ---
+
+export interface LabelStats {
+    count: number;
+    unique_labels_applied: string[];
+}
+
+export interface LabelingReport {
+    keywords: LabelStats;
+    groups: LabelStats;
+    categories: LabelStats;
+    total_items_processed: number;
+    synced_to_google: boolean;
 }
 
 // --- API Payloads ---

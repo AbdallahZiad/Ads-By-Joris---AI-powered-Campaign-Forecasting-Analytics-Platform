@@ -2,7 +2,8 @@ import { apiClient } from '../apiClient';
 import {
     CustomerListResponse,
     CampaignListResponse,
-    AdGroupListResponse
+    AdGroupListResponse,
+    LabelingReport
 } from '../../types';
 
 export const googleAdsService = {
@@ -36,11 +37,26 @@ export const googleAdsService = {
         return apiClient.put(`/api/v1/projects/groups/${groupId}/link-ad-group`, { ad_group_id: adGroupId });
     },
 
-    // 7. ▼▼▼ NEW: AI Auto-Linking ▼▼▼
+    // 7. AI Auto-Linking
     autoLinkProject: async (projectId: string) => {
         return apiClient.post<{ categories_matched: number, groups_matched: number }>(
             `/api/v1/projects/${projectId}/auto-link`,
-            {} // Empty body
+            {}
+        );
+    },
+
+    // 8. Apply Labels (Analyze & Sync)
+    applyLabels: async (projectId: string) => {
+        return apiClient.post<LabelingReport>(
+            `/api/v1/projects/${projectId}/apply-labels`,
+            {}
+        );
+    },
+
+    // 9. Remove Labels (Reset)
+    removeLabels: async (projectId: string) => {
+        return apiClient.delete<LabelingReport>(
+            `/api/v1/projects/${projectId}/labels`
         );
     }
 };

@@ -54,6 +54,32 @@ const MappingSection: React.FC<Props> = ({ project, isLinkingCustomer }) => {
     );
 };
 
+// --- Helper: Semantic Label Badge ---
+const getLabelStyle = (label: string): string => {
+    // Semantic Color Mapping
+    if (label.includes("Trending Up")) return "bg-green-50 text-green-700 border-green-200";
+    if (label.includes("Trending Down")) return "bg-red-50 text-red-700 border-red-200";
+    if (label.includes("Stable")) return "bg-slate-50 text-slate-600 border-slate-200";
+    if (label.includes("Hot Next Month")) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (label.includes("Volatile")) return "bg-yellow-50 text-yellow-700 border-yellow-200";
+    if (label.includes("Hidden Gem")) return "bg-purple-50 text-purple-700 border-purple-200";
+    if (label.includes("High Cost")) return "bg-rose-50 text-rose-700 border-rose-200";
+    if (label.includes("Low Data")) return "bg-gray-100 text-gray-500 border-gray-200";
+
+    // Default / Unknown Labels (Fallback)
+    return "bg-indigo-50 text-indigo-700 border-indigo-200";
+};
+
+const LabelBadge: React.FC<{ label: string }> = ({ label }) => {
+    const colorClass = getLabelStyle(label);
+
+    return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border mr-1.5 mb-1 tracking-wide whitespace-nowrap ${colorClass}`}>
+            {label}
+        </span>
+    );
+};
+
 const CategoryMapper: React.FC<{ projectId: string, category: Category, campaignOptions: SelectOption[] }> = ({ projectId, category, campaignOptions }) => {
     const queryClient = useQueryClient();
 
@@ -101,12 +127,27 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
         return [...category.groups].sort((a, b) => a.name.localeCompare(b.name));
     }, [category.groups]);
 
+    // ▼▼▼ FIX: Deterministic Sort for Labels ▼▼▼
+    const sortedLabels = useMemo(() => {
+        if (!category.applied_labels) return [];
+        return [...category.applied_labels].sort();
+    }, [category.applied_labels]);
+
     return (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-b border-gray-200">
-                <div className="flex items-center gap-3">
+
+                {/* ▼▼▼ Category Name & Labels (INLINE) ▼▼▼ */}
+                <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-bold text-gray-800 text-lg">{category.name}</span>
-                    <span className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded shadow-sm">CATEGORY</span>
+
+                    {sortedLabels.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                            {sortedLabels.map((label, idx) => (
+                                <LabelBadge key={idx} label={label} />
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-3 w-96">
@@ -117,11 +158,8 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
                             value={currentOption}
                             onChange={(opt) => {
                                 if (!opt) return;
-
                                 if (category.google_campaign_id && opt.id !== category.google_campaign_id) {
-                                    // ▼▼▼ SMART CHECK: Only warn if we actually have group links to lose ▼▼▼
                                     const hasAdGroupLinks = category.groups.some(grp => grp.google_ad_group_id);
-
                                     if (hasAdGroupLinks) {
                                         if(!confirm("Changing campaign will reset ad group links. Continue?")) return;
                                     }
@@ -219,15 +257,32 @@ const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, curren
 
     const currentOption = adGroupOptions.find(ag => ag.id === group.google_ad_group_id) || null;
 
+    // ▼▼▼ FIX: Deterministic Sort for Labels ▼▼▼
+    const sortedLabels = useMemo(() => {
+        if (!group.applied_labels) return [];
+        return [...group.applied_labels].sort();
+    }, [group.applied_labels]);
+
     return (
         <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 px-3 rounded transition-colors">
-            <div className="flex items-center gap-3">
-                <HiOutlineCollection className="text-gray-400" />
-                <span className="text-gray-700 font-medium">{group.name}</span>
-                <span className="text-xs text-gray-400">({group.keywords.length} keywords)</span>
+            {/* ▼▼▼ Group Name & Labels (INLINE) ▼▼▼ */}
+            <div className="flex items-center gap-3 overflow-hidden">
+                <div className="flex items-center gap-2 min-w-0">
+                    <HiOutlineCollection className="text-gray-400 flex-shrink-0" />
+                    <span className="text-gray-700 font-medium truncate">{group.name}</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">({group.keywords.length} keywords)</span>
+                </div>
+
+                {sortedLabels.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {sortedLabels.map((label, idx) => (
+                            <LabelBadge key={idx} label={label} />
+                        ))}
+                    </div>
+                )}
             </div>
 
-            <div className="w-80">
+            <div className="w-80 flex-shrink-0">
                 {isLoading || isParentLinking ? (
                     <div className="h-[38px] w-full bg-gray-100 rounded animate-pulse border border-gray-200" />
                 ) : (

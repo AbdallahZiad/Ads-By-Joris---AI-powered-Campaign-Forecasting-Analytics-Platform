@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { HiArrowRight, HiOutlineTemplate, HiSparkles, HiRefresh } from 'react-icons/hi';
+import { HiArrowRight, HiOutlineTemplate, HiSparkles, HiRefresh, HiLightningBolt, HiTrash } from 'react-icons/hi';
 import { FcGoogle } from 'react-icons/fc';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query'; // Import Query hooks
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import PageLayout from '../../common/PageLayout/PageLayout';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useProject } from '../../../contexts/ProjectContext';
 import { useProjectSync } from '../CategoryManagement/hooks/useProjectSync';
 import ProjectSelector from '../CategoryManagement/components/ProjectSelector';
-import { googleAdsService } from '../../../api/services/googleAdsService'; // Import Service
+import { googleAdsService } from '../../../api/services/googleAdsService';
+import { Project } from '../../../types';
 
 // Components
 import CustomerLinker from './components/CustomerLinker';
@@ -21,7 +22,6 @@ const GoogleAdsManager: React.FC = () => {
     const { user } = useAuth();
     const { currentProjectId, setCurrentProjectId } = useProject();
 
-    // State to coordinate the race condition for manual linking
     const [isLinkingCustomer, setIsLinkingCustomer] = useState(false);
 
     const {
@@ -35,18 +35,13 @@ const GoogleAdsManager: React.FC = () => {
 
     const isLinked = user?.is_google_ads_linked;
 
-    // --- AUTO-LINKING MUTATION ---
+    // --- MUTATION: Auto-Linking ---
     const autoLinkMutation = useMutation({
         mutationFn: (projectId: string) => googleAdsService.autoLinkProject(projectId),
-        onSuccess: async (data) => {
-            // 1. Refresh the project tree to show new links
+        onSuccess: async (data: { categories_matched: number, groups_matched: number }) => {
             await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
-
-            // 2. Also refresh dropdown caches so they know about the new campaign contexts
             await queryClient.invalidateQueries({ queryKey: ['google-ads-campaigns'] });
             await queryClient.invalidateQueries({ queryKey: ['google-ads-adgroups'] });
-
-            // 3. User Feedback
             alert(`Auto-Linking Complete!\n\nMatched ${data.categories_matched} Categories\nMatched ${data.groups_matched} Groups`);
         },
         onError: (error: any) => {
@@ -54,6 +49,57 @@ const GoogleAdsManager: React.FC = () => {
             alert("Auto-linking failed. Please ensure your project is linked to a valid Customer Account.");
         }
     });
+
+    // --- MUTATION: Apply Labels ---
+    const applyLabelsMutation = useMutation({
+        mutationFn: (projectId: string) => googleAdsService.applyLabels(projectId),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+        },
+        onError: (err) => {
+            console.error(err);
+            alert("Labeling failed. Please check network connection.");
+        }
+    });
+
+    // --- MUTATION: Remove Labels ---
+    const removeLabelsMutation = useMutation({
+        mutationFn: (projectId: string) => googleAdsService.removeLabels(projectId),
+
+        // Optimistic Update
+        onMutate: async () => {
+            await queryClient.cancelQueries({ queryKey: ['project', currentProjectId] });
+            const previousProject = queryClient.getQueryData<Project>(['project', currentProjectId]);
+
+            if (previousProject) {
+                queryClient.setQueryData<Project>(['project', currentProjectId], {
+                    ...previousProject,
+                    categories: previousProject.categories.map(cat => ({
+                        ...cat,
+                        applied_labels: [],
+                        groups: cat.groups.map(grp => ({
+                            ...grp,
+                            applied_labels: []
+                        }))
+                    }))
+                });
+            }
+
+            return { previousProject };
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+        },
+        onError: (_err, _newVal, context) => {
+            if (context?.previousProject) {
+                queryClient.setQueryData(['project', currentProjectId], context.previousProject);
+            }
+            alert("Failed to clear labels.");
+        }
+    });
+
+    // ▼▼▼ FIX: Unified Lock to prevent Race Conditions ▼▼▼
+    const isAnyActionPending = autoLinkMutation.isPending || applyLabelsMutation.isPending || removeLabelsMutation.isPending;
 
     const linkGoogleAds = useGoogleLogin({
         flow: 'auth-code',
@@ -97,7 +143,7 @@ const GoogleAdsManager: React.FC = () => {
         }
     };
 
-    // --- STATE 1: UNLINKED (Sales Page) ---
+    // --- STATE 1: UNLINKED ---
     if (!isLinked) {
         return (
             <PageLayout className="flex flex-col items-center justify-center min-h-full p-6 bg-gray-50">
@@ -129,14 +175,15 @@ const GoogleAdsManager: React.FC = () => {
         );
     }
 
-    // --- STATE 2: LINKED (Dashboard) ---
+    // --- STATE 2: LINKED ---
     return (
         <PageLayout className="h-full flex flex-col bg-gray-50">
 
             <div className="flex-1 overflow-y-auto">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-                    <div className="flex justify-between items-start mb-8">
+                    <div className="flex justify-between items-center mb-8">
+                        {/* LEFT: Title & Selector */}
                         <div className="flex items-center gap-6">
                             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Ads Manager</h1>
                             <div className="h-10 w-px bg-gray-300" />
@@ -150,32 +197,76 @@ const GoogleAdsManager: React.FC = () => {
                             />
                         </div>
 
-                        {/* ▼▼▼ NEW: Auto-Link Button (Right Side) ▼▼▼ */}
-                        {/* Only show if project is active and customer is linked */}
+                        {/* RIGHT: Action Toolbar */}
                         {activeProject && activeProject.linked_customer_id && (
-                            <button
-                                onClick={handleAutoLink}
-                                disabled={autoLinkMutation.isPending}
-                                className={`
-                                    flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all
-                                    ${autoLinkMutation.isPending
-                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-teal-600 hover:border-teal-200'}
-                                `}
-                                title="Automatically match categories and groups using AI"
-                            >
-                                {autoLinkMutation.isPending ? (
-                                    <>
+                            <div className="flex items-center gap-3">
+                                {/* 1. Auto-Link */}
+                                <button
+                                    onClick={handleAutoLink}
+                                    // ▼▼▼ FIX: Blocked if ANY action is running ▼▼▼
+                                    disabled={isAnyActionPending}
+                                    className={`
+                                        flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border
+                                        ${autoLinkMutation.isPending
+                                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                                        : isAnyActionPending
+                                            ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed' // Disabled style
+                                            : 'bg-white text-gray-700 border-gray-300 hover:border-teal-500 hover:text-teal-600 hover:shadow-md hover:-translate-y-0.5'}
+                                    `}
+                                >
+                                    {autoLinkMutation.isPending ? (
                                         <HiRefresh className="animate-spin" size={18} />
-                                        <span>Matching...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <HiSparkles className={autoLinkMutation.isPending ? "" : "text-teal-500"} size={18} />
-                                        <span>Auto-Match with AI</span>
-                                    </>
-                                )}
-                            </button>
+                                    ) : (
+                                        <HiSparkles className="text-teal-500" size={18} />
+                                    )}
+                                    <span>Auto-Link</span>
+                                </button>
+
+                                {/* 2. Analyze & Sync */}
+                                <button
+                                    onClick={() => applyLabelsMutation.mutate(currentProjectId!)}
+                                    // ▼▼▼ FIX: Blocked if ANY action is running ▼▼▼
+                                    disabled={isAnyActionPending}
+                                    className={`
+                                        flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white transition-all
+                                        ${applyLabelsMutation.isPending
+                                        ? 'bg-teal-800 cursor-not-allowed opacity-80'
+                                        : isAnyActionPending
+                                            ? 'bg-gray-300 cursor-not-allowed' // Disabled style
+                                            : 'bg-teal-600 hover:bg-teal-700 hover:-translate-y-0.5 hover:shadow-md'}
+                                    `}
+                                >
+                                    {applyLabelsMutation.isPending ? (
+                                        <HiRefresh className="animate-spin" size={18} />
+                                    ) : (
+                                        <HiLightningBolt size={18} />
+                                    )}
+                                    <span>Analyze & Sync Labels</span>
+                                </button>
+
+                                <div className="h-6 w-px bg-gray-200 mx-2" />
+
+                                {/* 3. Clear Labels */}
+                                <button
+                                    onClick={() => {
+                                        if(confirm("Are you sure you want to remove all [Joris] labels from your Google Ads entities?")) {
+                                            removeLabelsMutation.mutate(currentProjectId!);
+                                        }
+                                    }}
+                                    // ▼▼▼ FIX: Blocked if ANY action is running ▼▼▼
+                                    disabled={isAnyActionPending}
+                                    className={`
+                                        flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors border border-transparent
+                                        ${isAnyActionPending
+                                        ? 'text-gray-300 cursor-not-allowed'
+                                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-100'}
+                                    `}
+                                    title="Remove all AI-generated labels"
+                                >
+                                    <HiTrash size={16} />
+                                    <span>Clear Labels</span>
+                                </button>
+                            </div>
                         )}
                     </div>
 
