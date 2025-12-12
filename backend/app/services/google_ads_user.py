@@ -6,7 +6,7 @@ from google.ads.googleads.errors import GoogleAdsException
 
 from app.core.config import settings
 from app.models import User
-from app.schemas.google_ads_user_schemas import GoogleAdsCustomer
+from app.schemas.google_ads_user_schemas import GoogleAdsCustomer, GoogleAdsCampaign, GoogleAdsAdGroup
 
 class UserGoogleAdsService:
     """
@@ -14,18 +14,28 @@ class UserGoogleAdsService:
     Responsible for fetching accessible customers, linking accounts, and managing campaigns.
     """
 
-    def __init__(self, user: User):
+    def __init__(self, user: User, login_customer_id: str = None):
+        """
+        Args:
+            user: The authenticated user model.
+            login_customer_id: Optional. The explicit Customer ID to act as.
+                               If provided, sets the 'login-customer-id' header.
+        """
         if not user.google_refresh_token:
             raise ValueError("User does not have a linked Google Ads account (missing refresh token).")
 
-        # Construct credentials dynamically using the User's Refresh Token
         self.creds_dict = {
             "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
             "client_id": settings.GOOGLE_ADS_CLIENT_ID,
             "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
             "refresh_token": user.google_refresh_token,
-            "use_proto_plus": True
+            "use_proto_plus": True,
         }
+
+        # If we are targeting a specific sub-account (e.g. searching campaigns),
+        # we usually need to specify that ID in the configuration.
+        if login_customer_id:
+            self.creds_dict["login_customer_id"] = login_customer_id
 
         self.client = GoogleAdsClient.load_from_dict(self.creds_dict)
         self.user = user
@@ -33,114 +43,166 @@ class UserGoogleAdsService:
     async def get_accessible_customers(self) -> List[GoogleAdsCustomer]:
         """
         Fetches the list of Google Ads accounts directly accessible by the user's credentials.
-        This is used to populate the dropdown for the "Link Customer" step.
         """
         customer_service = self.client.get_service("CustomerService")
 
-        # This call does NOT require a login_customer_id
         try:
-            # Running synchronous API call in a thread
             response = await asyncio.to_thread(
                 customer_service.list_accessible_customers
             )
 
             customers = []
             for resource_name in response.resource_names:
-                # The response only gives resource names (customers/1234567890).
-                # To get the descriptive name, we technically need to query the customer detail,
-                # but that requires knowing which Manager to log in as.
-                # For the initial listing, we just parse the ID.
-                # In a robust system, we would query each customer to get its name,
-                # but that can be slow and permission-heavy.
-
                 customer_id = resource_name.split("/")[-1]
-
-                # Basic object without name for now (Frontend can label by ID)
                 customers.append(GoogleAdsCustomer(
                     resource_name=resource_name,
                     id=customer_id,
-                    descriptive_name=f"Customer {customer_id}" # Placeholder
+                    descriptive_name=f"Account {customer_id}"
                 ))
-
             return customers
 
         except GoogleAdsException as ex:
-            print(f"Request with ID '{ex.request_id}' failed with status '{ex.error.code().name}' and includes the following errors:")
-            for error in ex.failure.errors:
-                print(f"\tError with message '{error.message}'.")
-                if error.location:
-                    for field_path_element in error.location.field_path_elements:
-                        print(f"\t\tOn field: {field_path_element.field_name}")
+            print(f"Error fetching customers: {ex.error.code().name}")
             raise ex
 
-    async def get_customer_details(self, customer_id: str) -> Optional[GoogleAdsCustomer]:
-        """
-        Fetches details (Name, Currency, Timezone) for a specific customer.
-        This verifies that we can actually manage this account.
-        """
-        # To get details, we must set the login-customer-id.
-        # If the user has direct access, login-customer-id can be the customer_id itself.
-        # If the user accesses via a Manager, we might need logic to find that Manager ID.
-        # For this implementation, we try direct access.
+    async def validate_access(self, customer_id: str) -> bool:
+        """Checks if the user has access to this customer ID."""
+        accessible = await self.get_accessible_customers()
+        return any(c.id == customer_id for c in accessible)
 
-        # Re-initialize client with the specific login_customer_id
-        config = self.creds_dict.copy()
-        config["login_customer_id"] = customer_id
-        client = GoogleAdsClient.load_from_dict(config)
+    # --- Validation Methods (NEW) ---
 
-        ga_service = client.get_service("GoogleAdsService")
+    async def verify_campaign_exists(self, customer_id: str, campaign_id: str) -> bool:
+        """
+        Validates that a specific Campaign ID exists within the given Customer Account.
+        """
+        ga_service = self.client.get_service("GoogleAdsService")
+        query = f"SELECT campaign.id FROM campaign WHERE campaign.id = {campaign_id} LIMIT 1"
+
+        try:
+            stream = await asyncio.to_thread(
+                ga_service.search_stream,
+                customer_id=customer_id,
+                query=query
+            )
+            # If we get any result, the campaign exists
+            for batch in stream:
+                for _ in batch.results:
+                    return True
+            return False
+        except GoogleAdsException:
+            return False
+
+    async def verify_ad_group_parentage(self, customer_id: str, campaign_id: str, ad_group_id: str) -> bool:
+        """
+        Validates that an Ad Group exists AND belongs to the specific Campaign.
+        This prevents linking an Ad Group to the wrong Campaign category.
+        """
+        ga_service = self.client.get_service("GoogleAdsService")
+        # We query for the ad group, but filter by the expected parent campaign
+        query = f"""
+            SELECT ad_group.id 
+            FROM ad_group 
+            WHERE ad_group.id = {ad_group_id} 
+            AND campaign.id = {campaign_id} 
+            LIMIT 1
+        """
+
+        try:
+            stream = await asyncio.to_thread(
+                ga_service.search_stream,
+                customer_id=customer_id,
+                query=query
+            )
+            for batch in stream:
+                for _ in batch.results:
+                    return True
+            return False
+        except GoogleAdsException:
+            return False
+
+    # --- Fetching Methods ---
+
+    async def get_campaigns(self, customer_id: str) -> List[GoogleAdsCampaign]:
+        """
+        Fetches ALL enabled/paused campaigns for a given Customer ID.
+        """
+        ga_service = self.client.get_service("GoogleAdsService")
 
         query = """
                 SELECT
-                    customer.id,
-                    customer.descriptive_name,
-                    customer.currency_code,
-                    customer.time_zone,
-                    customer.manager
-                FROM customer
-                         LIMIT 1 \
+                    campaign.id,
+                    campaign.name,
+                    campaign.status,
+                    campaign.resource_name
+                FROM campaign
+                WHERE campaign.status != 'REMOVED'
+                ORDER BY campaign.name ASC \
                 """
 
         try:
-            # Execute query
             stream = await asyncio.to_thread(
                 ga_service.search_stream,
                 customer_id=customer_id,
                 query=query
             )
 
+            campaigns = []
             for batch in stream:
                 for row in batch.results:
-                    c = row.customer
-                    return GoogleAdsCustomer(
-                        resource_name=c.resource_name,
+                    c = row.campaign
+                    campaigns.append(GoogleAdsCampaign(
                         id=str(c.id),
-                        descriptive_name=c.descriptive_name,
-                        currency_code=c.currency_code,
-                        time_zone=c.time_zone,
-                        is_manager=c.manager
-                    )
-            return None
+                        name=c.name,
+                        status=c.status.name,
+                        resource_name=c.resource_name
+                    ))
+            return campaigns
 
-        except GoogleAdsException:
-            # If we fail here, it likely means we don't have direct access
-            # (perhaps need a manager ID).
-            return None
+        except GoogleAdsException as ex:
+            print(f"Error fetching campaigns for {customer_id}: {ex}")
+            raise ex
 
-    async def validate_and_link_customer(self, customer_id: str) -> bool:
+    async def get_ad_groups(self, customer_id: str, campaign_id: str) -> List[GoogleAdsAdGroup]:
         """
-        Validates access and ensures the customer ID is valid before linking.
+        Fetches ALL enabled/paused Ad Groups for a specific Campaign.
         """
-        # 1. Check if it's in the accessible list
-        accessible = await self.get_accessible_customers()
-        ids = [c.id for c in accessible]
+        ga_service = self.client.get_service("GoogleAdsService")
 
-        if customer_id not in ids:
-            return False
+        query = f"""
+            SELECT 
+                ad_group.id, 
+                ad_group.name, 
+                ad_group.status,
+                ad_group.resource_name,
+                campaign.id
+            FROM ad_group 
+            WHERE 
+                campaign.id = {campaign_id} 
+                AND ad_group.status != 'REMOVED'
+            ORDER BY ad_group.name ASC
+        """
 
-        # 2. (Optional) Try to fetch details to confirm we can Query it
-        # details = await self.get_customer_details(customer_id)
-        # if not details:
-        #    return False
+        try:
+            stream = await asyncio.to_thread(
+                ga_service.search_stream,
+                customer_id=customer_id,
+                query=query
+            )
 
-        return True
+            ad_groups = []
+            for batch in stream:
+                for row in batch.results:
+                    ag = row.ad_group
+                    ad_groups.append(GoogleAdsAdGroup(
+                        id=str(ag.id),
+                        name=ag.name,
+                        status=ag.status.name,
+                        resource_name=ag.resource_name,
+                        campaign_id=str(row.campaign.id)
+                    ))
+            return ad_groups
+
+        except GoogleAdsException as ex:
+            print(f"Error fetching ad groups: {ex}")
+            raise ex

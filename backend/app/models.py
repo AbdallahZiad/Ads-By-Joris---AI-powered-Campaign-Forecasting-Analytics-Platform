@@ -37,7 +37,8 @@ class User(UserBase, table=True):
     # Permissions
     google_scopes: List[str] | None = Field(default_factory=list, sa_column=Column(JSON))
 
-    linked_customer_id: str | None = Field(default=None)
+    # REFACTORED: Linked Customer ID moved to Project level.
+    # User holds the KEYS (Refresh Token), Projects determine the ROOM (Customer ID).
 
     # Relationships
     projects: list["Project"] = Relationship(back_populates="owner", cascade_delete=True)
@@ -157,6 +158,7 @@ class Group(SQLModel, table=True):
 
     keywords: list[Keyword] = Relationship(back_populates="group", cascade_delete=True)
 
+    # Link to Google Ad Group
     google_ad_group_id: str | None = Field(default=None)
 
 class GroupCreate(SQLModel):
@@ -177,11 +179,15 @@ class Category(SQLModel, table=True):
 
     groups: list[Group] = Relationship(back_populates="category", cascade_delete=True)
 
+    # Link to Google Campaign (NEW)
+    google_campaign_id: str | None = Field(default=None)
+
 class CategoryCreate(SQLModel):
     name: str
 
 class CategoryUpdate(SQLModel):
-    name: str
+    name: str | None = None
+    google_campaign_id: str | None = None
 
 
 # 4. Projects
@@ -196,18 +202,22 @@ class Project(SQLModel, table=True):
 
     categories: list[Category] = Relationship(back_populates="project", cascade_delete=True)
 
+    # Link to Google Ads Customer (NEW)
+    linked_customer_id: str | None = Field(default=None)
+
 class ProjectCreate(SQLModel):
     title: str
 
 class ProjectUpdate(SQLModel):
     title: str | None = None
+    linked_customer_id: str | None = None
 
 
 # --- Nested Input Models for Full Tree Creation ---
 
 class GroupCreateFull(SQLModel):
     name: str
-    keywords: List[str] # Simple list of strings for ease of input
+    keywords: List[str]
 
 class CategoryCreateFull(SQLModel):
     name: str
@@ -228,11 +238,13 @@ class GroupPublic(SQLModel):
     id: uuid.UUID
     name: str
     keywords: List[KeywordPublic]
+    google_ad_group_id: str | None = None
 
 class CategoryPublic(SQLModel):
     id: uuid.UUID
     name: str
     groups: List[GroupPublic]
+    google_campaign_id: str | None = None
 
 class ProjectPublic(SQLModel):
     id: uuid.UUID
@@ -241,6 +253,7 @@ class ProjectPublic(SQLModel):
     updated_at: datetime
     owner_id: uuid.UUID
     categories: List[CategoryPublic]
+    linked_customer_id: str | None = None
 
 class ProjectsPublic(SQLModel):
     data: list[ProjectPublic]
