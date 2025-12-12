@@ -10,6 +10,7 @@ export interface Group {
     id: string;
     name: string;
     keywords: Keyword[];
+    // Confirmed Field Name
     google_ad_group_id?: string | null;
 }
 
@@ -17,6 +18,8 @@ export interface Category {
     id: string;
     name: string;
     groups: Group[];
+    // Confirmed Field Name
+    google_campaign_id?: string | null;
 }
 
 export interface ProjectMetadata {
@@ -25,10 +28,46 @@ export interface ProjectMetadata {
     created_at: string;
     updated_at: string;
     categories_count?: number;
+    owner_id: string;
+    // ▼▼▼ FIX: Correct Field Name from Backend JSON ▼▼▼
+    linked_customer_id?: string | null;
 }
 
 export interface Project extends ProjectMetadata {
     categories: Category[];
+}
+
+// --- Google Ads Entities ---
+
+export interface GoogleAdsCustomer {
+    id: string;
+    resource_name: string;
+    descriptive_name: string;
+    is_manager: boolean;
+}
+
+export interface GoogleAdsCampaign {
+    id: string;
+    name: string;
+    status: string;
+}
+
+export interface GoogleAdsAdGroup {
+    id: string;
+    name: string;
+    status: string;
+}
+
+export interface CustomerListResponse {
+    customers: GoogleAdsCustomer[];
+}
+
+export interface CampaignListResponse {
+    campaigns: GoogleAdsCampaign[];
+}
+
+export interface AdGroupListResponse {
+    ad_groups: GoogleAdsAdGroup[];
 }
 
 // --- API Payloads ---
@@ -41,8 +80,6 @@ export interface CreateGroupPayload { name: string; }
 export interface UpdateGroupPayload { name?: string; google_ad_group_id?: string; }
 export interface CreateKeywordPayload { text: string; }
 export interface BulkCreateKeywordsPayload { keywords: string[]; }
-
-// ▼▼▼ NEW: Atomic Tree Creation Payload ▼▼▼
 export interface CreateProjectTreePayload {
     title: string;
     categories: {
@@ -54,7 +91,13 @@ export interface CreateProjectTreePayload {
     }[];
 }
 
-// --- Analysis Types ---
+// --- Select / Inputs ---
+export interface SelectOption {
+    id: string;
+    name: string;
+}
+
+// --- Analysis & Scanner Types (Unchanged) ---
 export type CompetitionLevel = "UNSPECIFIED" | "UNKNOWN" | "LOW" | "MEDIUM" | "HIGH";
 export type Month = "UNSPECIFIED" | "JANUARY" | "FEBRUARY" | "MARCH" | "APRIL" | "MAY" | "JUNE" | "JULY" | "AUGUST" | "SEPTEMBER" | "OCTOBER" | "NOVEMBER" | "DECEMBER";
 
@@ -122,11 +165,6 @@ export interface AnalyzedCategory {
     id: string;
     name: string;
     groups: AnalyzedGroup[];
-}
-
-export interface SelectOption {
-    id: string;
-    name: string;
 }
 
 export interface ScannerConfig {

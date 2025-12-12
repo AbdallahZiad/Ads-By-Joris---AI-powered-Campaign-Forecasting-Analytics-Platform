@@ -57,7 +57,6 @@ const NavLink: React.FC<NavLinkProps> = ({ icon, label, active = false, disabled
 interface SidebarProps {
     viewMode: ViewMode | 'none';
     onNavigate: (mode: ViewMode) => void;
-    // Removed hasScannedData
     hasAnalysisData: boolean;
     onAuthClick: () => void;
 }
@@ -105,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasAnalysisData
                     icon={<HiOutlineCollection size={22} />}
                     label="Category Planner"
                     active={viewMode === 'management'}
-                    disabled={false} // Always open
+                    disabled={false}
                     onClick={() => onNavigate('management')}
                 />
                 <NavLink
@@ -147,6 +146,8 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasAnalysisData
                                 <img
                                     src={user.avatar_url}
                                     alt="Profile"
+                                    // ▼▼▼ FIX: Added referrerPolicy to allow Google Image loading ▼▼▼
+                                    referrerPolicy="no-referrer"
                                     className={`${styles.profileImage} object-cover`}
                                 />
                             ) : (

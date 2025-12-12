@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '../../../contexts/ProjectContext';
 import { useKeywordAnalysis } from '../../../hooks/useKeywordAnalysis';
@@ -6,7 +6,7 @@ import AnalyzedCategoryComponent from './AnalyzedCategory/AnalyzedCategory';
 import AnalysisChart from './AnalysisChart/AnalysisChart';
 import LoadingOverlay from '../../common/LoadingOverlay/LoadingOverlay';
 import { GEO_TARGET_REVERSE_MAP, LANGUAGE_REVERSE_MAP } from '../../../constants';
-import PageLayout from '../../common/PageLayout/PageLayout'; // ▼▼▼ Import
+import PageLayout from '../../common/PageLayout/PageLayout';
 
 const KeywordAnalysis: React.FC = () => {
     const navigate = useNavigate();
@@ -23,18 +23,11 @@ const KeywordAnalysis: React.FC = () => {
     const { selection, countryId, languageId } = analysisInputs;
 
     const { analyzedCategories, isLoading } = useKeywordAnalysis(selection, countryId, languageId);
-    const [chartSelection, setChartSelection] = React.useState<Set<string>>(new Set());
 
-    React.useEffect(() => {
-        if (selection.length > 0 && selection[0].groups.length > 0) {
-            const firstGroupKeywords = selection[0].groups[0].keywords;
-            setChartSelection(new Set(firstGroupKeywords));
-        } else {
-            setChartSelection(new Set());
-        }
-    }, [selection]);
+    // ▼▼▼ FIX: Start with empty selection, do not auto-select first group ▼▼▼
+    const [chartSelection, setChartSelection] = useState<Set<string>>(new Set());
 
-    const selectedKeywordsForChart = React.useMemo(() => {
+    const selectedKeywordsForChart = useMemo(() => {
         const selected: any[] = [];
         analyzedCategories.forEach(cat => {
             cat.groups.forEach(grp => {
@@ -64,15 +57,24 @@ const KeywordAnalysis: React.FC = () => {
     const totalSelectedCount = chartSelection.size;
 
     return (
-        // ▼▼▼ WRAPPER: Matches Auth Feel ▼▼▼
         <PageLayout>
             <div className="max-w-6xl mx-auto p-6">
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-800">Keyword Analysis</h1>
+
+                        {/* ▼▼▼ FIX: Conditional Header Text ▼▼▼ */}
                         <p className="text-sm text-gray-500 mt-1">
-                            Showing {totalSelectedCount} keywords for:
-                            <span className="font-medium text-gray-600"> {countryName}</span> (Language: <span className="font-medium text-gray-600">{languageName}</span>)
+                            {totalSelectedCount > 0 ? (
+                                <>
+                                    Showing <span className="font-semibold text-gray-900">{totalSelectedCount}</span> keywords for:
+                                </>
+                            ) : (
+                                <span>Analysis Target: </span>
+                            )}
+                            <span className="font-medium text-gray-600 ml-1"> {countryName}</span>
+                            <span className="mx-1">•</span>
+                            Language: <span className="font-medium text-gray-600">{languageName}</span>
                         </p>
                     </div>
                     <button

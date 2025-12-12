@@ -1,16 +1,34 @@
 import React from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { HiCheckCircle, HiLightningBolt, HiTrendingUp, HiTag, HiArrowRight } from 'react-icons/hi';
+import { HiArrowRight, HiOutlineTemplate } from 'react-icons/hi';
 import { FcGoogle } from 'react-icons/fc';
+import { useNavigate } from 'react-router-dom'; // Import navigate
 import PageLayout from '../../common/PageLayout/PageLayout';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useProject } from '../../../contexts/ProjectContext';
+import { useProjectSync } from '../CategoryManagement/hooks/useProjectSync';
+import ProjectSelector from '../CategoryManagement/components/ProjectSelector';
+
+// Components
+import CustomerLinker from './components/CustomerLinker';
+import MappingSection from './components/MappingSection';
 
 const GoogleAdsManager: React.FC = () => {
+    const navigate = useNavigate(); // Hook for navigation
     const { user } = useAuth();
+    const { currentProjectId, setCurrentProjectId } = useProject();
+
+    const {
+        projects,
+        activeProject,
+        isLoadingActive,
+        createProject,
+        updateProject,
+        deleteProject
+    } = useProjectSync(currentProjectId);
+
     const isLinked = user?.is_google_ads_linked;
 
-    // --- GOOGLE ADS LINKING HOOK ---
-    // Moved from Sidebar to here
     const linkGoogleAds = useGoogleLogin({
         flow: 'auth-code',
         ux_mode: 'redirect',
@@ -19,110 +37,130 @@ const GoogleAdsManager: React.FC = () => {
         select_account: true,
     });
 
-    // --- LINKED STATE (Success) ---
-    if (isLinked) {
-        return (
-            <PageLayout className="flex items-center justify-center h-full p-6">
-                <div className="max-w-2xl w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-                    <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <HiCheckCircle size={40} />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-900 mb-3">
-                        Google Ads Connected
-                    </h1>
-                    <p className="text-gray-500 text-lg mb-8">
-                        Your account is successfully linked. We are now syncing your campaigns and metrics.
-                    </p>
+    const handleCreateProject = async (title: string) => {
+        try {
+            const newProj = await createProject({ title });
+            setCurrentProjectId(newProj.id);
+        } catch (e) {
+            console.error("Failed to create project");
+        }
+    };
 
-                    <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 inline-block text-left w-full max-w-md">
-                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Active Integrations</h3>
-                        <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <FcGoogle size={24} />
-                                <div>
-                                    <p className="font-medium text-gray-900">Google Ads</p>
-                                    <p className="text-xs text-green-600 font-medium flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                        Sync Active
-                                    </p>
-                                </div>
-                            </div>
-                            <button className="text-sm text-gray-400 hover:text-gray-600" onClick={() => linkGoogleAds()}>
-                                Reconnect
-                            </button>
+    const handleRenameProject = async (id: string, title: string) => {
+        try {
+            await updateProject({ id, title });
+        } catch (e) {
+            console.error("Failed to rename project");
+        }
+    };
+
+    const handleDeleteProject = async (id: string) => {
+        try {
+            await deleteProject(id);
+            if (id === currentProjectId) setCurrentProjectId(null);
+        } catch (e) {
+            console.error("Failed to delete project");
+        }
+    };
+
+    // --- STATE 1: UNLINKED (Sales Page) ---
+    if (!isLinked) {
+        return (
+            <PageLayout className="flex flex-col items-center justify-center min-h-full p-6 bg-gray-50">
+                <div className="max-w-4xl w-full text-center">
+                    <div className="mb-12">
+                        <div className="inline-flex items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-gray-100 mb-6">
+                            <FcGoogle size={48} />
                         </div>
+                        <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+                            Supercharge your Campaigns
+                        </h1>
+                        <p className="text-xl text-gray-500 max-w-2xl mx-auto">
+                            Connect your Google Ads account to map your categories, sync keywords, and analyze performance.
+                        </p>
+                    </div>
+
+                    <div className="flex justify-center">
+                        <button
+                            onClick={() => linkGoogleAds()}
+                            className="group flex items-center gap-3 px-8 py-4 bg-teal-600 text-white text-lg font-bold rounded-xl shadow-xl hover:bg-teal-700 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
+                        >
+                            <FcGoogle size={24} />
+                            <span>Link Google Ads Account</span>
+                            <HiArrowRight className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                        </button>
                     </div>
                 </div>
             </PageLayout>
         );
     }
 
-    // --- UNLINKED STATE (Sales Page) ---
+    // --- STATE 2: LINKED (Dashboard) ---
     return (
-        <PageLayout className="flex flex-col items-center justify-center min-h-full p-6">
-            <div className="max-w-4xl w-full text-center">
+        <PageLayout className="h-full flex flex-col bg-gray-50">
 
-                {/* Hero */}
-                <div className="mb-12">
-                    <div className="inline-flex items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-gray-100 mb-6">
-                        <FcGoogle size={48} />
-                    </div>
-                    <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-                        Supercharge your Campaigns
-                    </h1>
-                    <p className="text-xl text-gray-500 max-w-2xl mx-auto">
-                        Connect your Google Ads account to unlock AI-driven insights, automated labeling, and predictive performance analysis.
-                    </p>
-                </div>
+            <div className="flex-1 overflow-y-auto">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-                {/* Features Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 text-left">
-                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center mb-4">
-                            <HiLightningBolt size={24} />
+                    <div className="flex justify-between items-start mb-8">
+                        <div className="flex items-center gap-6">
+                            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Ads Manager</h1>
+                            <div className="h-10 w-px bg-gray-300" />
+                            <ProjectSelector
+                                projects={projects}
+                                currentProjectId={currentProjectId}
+                                onSelect={setCurrentProjectId}
+                                onCreate={handleCreateProject}
+                                onRename={handleRenameProject}
+                                onDelete={handleDeleteProject}
+                            />
                         </div>
-                        <h3 className="font-bold text-gray-900 mb-2">Smart Management</h3>
-                        <p className="text-sm text-gray-500 leading-relaxed">
-                            Visualize your campaign hierarchy and identify optimization opportunities instantly.
-                        </p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-lg flex items-center justify-center mb-4">
-                            <HiTag size={24} />
+                    {/* Main Content Area */}
+                    {isLoadingActive ? (
+                        <div className="flex items-center justify-center h-64 text-gray-400">
+                            Loading Project Data...
                         </div>
-                        <h3 className="font-bold text-gray-900 mb-2">Auto-Labeling</h3>
-                        <p className="text-sm text-gray-500 leading-relaxed">
-                            Automatically tag and categorize trending keywords and campaigns based on performance.
-                        </p>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center mb-4">
-                            <HiTrendingUp size={24} />
+                    ) : !currentProjectId ? (
+                        <div className="flex flex-col items-center justify-center h-96 border-2 border-dashed border-gray-200 rounded-2xl bg-white text-gray-400">
+                            <FcGoogle size={48} className="mb-4 opacity-50 grayscale" />
+                            <p className="text-lg font-medium">No Project Selected</p>
+                            <p className="text-sm">Select a project above to start mapping campaigns.</p>
                         </div>
-                        <h3 className="font-bold text-gray-900 mb-2">Predictive Analysis</h3>
-                        <p className="text-sm text-gray-500 leading-relaxed">
-                            Forecast future performance using our advanced AI models on your historical data.
-                        </p>
-                    </div>
-                </div>
+                    ) : activeProject ? (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-                {/* CTA */}
-                <div className="flex justify-center">
-                    <button
-                        onClick={() => linkGoogleAds()}
-                        className="group flex items-center gap-3 px-8 py-4 bg-gray-900 text-white text-lg font-bold rounded-xl shadow-xl hover:bg-gray-800 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
-                    >
-                        <FcGoogle size={24} />
-                        <span>Link Google Ads Account</span>
-                        <HiArrowRight className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-                    </button>
-                </div>
+                            <CustomerLinker activeProject={activeProject} />
 
-                <p className="mt-6 text-xs text-gray-400">
-                    We only request permissions necessary to analyze and report on your campaigns.
-                </p>
+                            {/* ▼▼▼ FIX: Handle Empty Project State ▼▼▼ */}
+                            {activeProject.categories.length === 0 ? (
+                                <div className="text-center py-16 bg-white rounded-lg border border-dashed border-gray-300">
+                                    <HiOutlineTemplate className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900">This project is empty</h3>
+                                    <p className="mt-1 text-sm text-gray-500 mb-6">
+                                        You need to create categories and groups before you can map them to Google Ads.
+                                    </p>
+                                    <button
+                                        onClick={() => navigate('/planner')}
+                                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
+                                    >
+                                        Go to Planner
+                                        <HiArrowRight className="ml-2 -mr-1 h-4 w-4" />
+                                    </button>
+                                </div>
+                            ) : activeProject.linked_customer_id ? (
+                                <MappingSection project={activeProject} />
+                            ) : (
+                                <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300 text-gray-500 shadow-sm">
+                                    <p className="font-medium">Link a Customer Account above to enable Campaign Mapping.</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : null}
+
+                    <div className="h-20" />
+                </div>
             </div>
         </PageLayout>
     );
