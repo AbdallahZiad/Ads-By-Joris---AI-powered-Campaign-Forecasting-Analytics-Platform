@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
 # --- Customers ---
@@ -40,10 +40,29 @@ class GoogleAdsAdGroup(BaseModel):
     name: str
     status: str
     resource_name: str
-    campaign_id: str # Helpful for validation
+    campaign_id: str
 
 class AdGroupListResponse(BaseModel):
     ad_groups: List[GoogleAdsAdGroup]
 
 class LinkGroupAdGroupRequest(BaseModel):
     ad_group_id: str
+
+
+# --- NEW: Labeling Report Schemas ---
+
+class EntityLabelStats(BaseModel):
+    count: int = 0
+    unique_labels_applied: List[str] = []
+
+class LabelingReport(BaseModel):
+    """
+    Detailed summary of the Labeling Engine's execution.
+    """
+    keywords: EntityLabelStats = Field(default_factory=EntityLabelStats)
+    groups: EntityLabelStats = Field(default_factory=EntityLabelStats)
+    categories: EntityLabelStats = Field(default_factory=EntityLabelStats)
+
+    # Metadata
+    total_items_processed: int = 0
+    synced_to_google: bool = True

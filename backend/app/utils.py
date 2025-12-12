@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -183,3 +184,22 @@ def verify_password_reset_token(token: str) -> str | None:
         return str(decoded_token["sub"])
     except InvalidTokenError:
         return None
+
+
+def normalize_keyword(text: str) -> str:
+    """
+    Standardizes keyword text for robust comparison.
+    1. Converts to lowercase.
+    2. Strips leading/trailing whitespace.
+    3. Normalizes internal whitespace (e.g. "  " becomes " ").
+    """
+    if not text:
+        return ""
+
+    # Lowercase and strip ends
+    text = text.lower().strip()
+
+    # Replace multiple spaces/tabs with a single space
+    text = re.sub(r'\s+', ' ', text)
+
+    return text

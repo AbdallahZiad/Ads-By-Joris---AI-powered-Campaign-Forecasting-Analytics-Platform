@@ -37,9 +37,6 @@ class User(UserBase, table=True):
     # Permissions
     google_scopes: List[str] | None = Field(default_factory=list, sa_column=Column(JSON))
 
-    # REFACTORED: Linked Customer ID moved to Project level.
-    # User holds the KEYS (Refresh Token), Projects determine the ROOM (Customer ID).
-
     # Relationships
     projects: list["Project"] = Relationship(back_populates="owner", cascade_delete=True)
 
@@ -141,6 +138,9 @@ class Keyword(SQLModel, table=True):
     group_id: uuid.UUID = Field(foreign_key="group.id", ondelete="CASCADE")
     group: "Group" = Relationship(back_populates="keywords")
 
+    # Stores applied labels
+    applied_labels: List[str] | None = Field(default_factory=list, sa_column=Column(JSON))
+
 class KeywordCreate(SQLModel):
     text: str
 
@@ -161,6 +161,9 @@ class Group(SQLModel, table=True):
     # Link to Google Ad Group
     google_ad_group_id: str | None = Field(default=None)
 
+    # Stores applied labels
+    applied_labels: List[str] | None = Field(default_factory=list, sa_column=Column(JSON))
+
 class GroupCreate(SQLModel):
     name: str
 
@@ -179,8 +182,11 @@ class Category(SQLModel, table=True):
 
     groups: list[Group] = Relationship(back_populates="category", cascade_delete=True)
 
-    # Link to Google Campaign (NEW)
+    # Link to Google Campaign
     google_campaign_id: str | None = Field(default=None)
+
+    # Stores applied labels
+    applied_labels: List[str] | None = Field(default_factory=list, sa_column=Column(JSON))
 
 class CategoryCreate(SQLModel):
     name: str
@@ -202,7 +208,7 @@ class Project(SQLModel, table=True):
 
     categories: list[Category] = Relationship(back_populates="project", cascade_delete=True)
 
-    # Link to Google Ads Customer (NEW)
+    # Link to Google Ads Customer
     linked_customer_id: str | None = Field(default=None)
 
 class ProjectCreate(SQLModel):
@@ -233,18 +239,39 @@ class ProjectCreateFull(SQLModel):
 class KeywordPublic(SQLModel):
     id: uuid.UUID
     text: str
+    applied_labels: List[str] = Field(default_factory=list)
+
+    # FIX: Validator to handle None from DB
+    @field_validator("applied_labels", mode="before")
+    @classmethod
+    def ensure_list(cls, v: Any) -> List[str]:
+        return v or []
 
 class GroupPublic(SQLModel):
     id: uuid.UUID
     name: str
     keywords: List[KeywordPublic]
     google_ad_group_id: str | None = None
+    applied_labels: List[str] = Field(default_factory=list)
+
+    # FIX: Validator to handle None from DB
+    @field_validator("applied_labels", mode="before")
+    @classmethod
+    def ensure_list(cls, v: Any) -> List[str]:
+        return v or []
 
 class CategoryPublic(SQLModel):
     id: uuid.UUID
     name: str
     groups: List[GroupPublic]
     google_campaign_id: str | None = None
+    applied_labels: List[str] = Field(default_factory=list)
+
+    # FIX: Validator to handle None from DB
+    @field_validator("applied_labels", mode="before")
+    @classmethod
+    def ensure_list(cls, v: Any) -> List[str]:
+        return v or []
 
 class ProjectPublic(SQLModel):
     id: uuid.UUID
