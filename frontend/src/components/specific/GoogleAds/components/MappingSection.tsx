@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { HiOutlineViewGrid, HiOutlineCollection } from 'react-icons/hi';
 import { Project, Category, Group, SelectOption } from '../../../../types';
@@ -7,19 +7,25 @@ import SearchableSelect from '../../../common/SearchableSelect/SearchableSelect'
 
 interface Props {
     project: Project;
+    isLinkingCustomer: boolean;
 }
 
-const MappingSection: React.FC<Props> = ({ project }) => {
+const MappingSection: React.FC<Props> = ({ project, isLinkingCustomer }) => {
     const { data: campaignData, isLoading: isLoadingCampaigns } = useQuery({
         queryKey: ['google-ads-campaigns', project.id, project.linked_customer_id],
         queryFn: () => googleAdsService.getCampaigns(project.id),
-        enabled: !!project.linked_customer_id,
+        enabled: !!project.linked_customer_id && !isLinkingCustomer,
+        staleTime: 1000 * 60 * 5,
     });
 
     const campaignOptions: SelectOption[] = campaignData?.campaigns.map(c => ({
         id: c.id,
         name: `${c.name} (${c.status})`
     })) || [];
+
+    const sortedCategories = useMemo(() => {
+        return [...project.categories].sort((a, b) => a.name.localeCompare(b.name));
+    }, [project.categories]);
 
     return (
         <div className="space-y-6">
@@ -28,13 +34,13 @@ const MappingSection: React.FC<Props> = ({ project }) => {
                 Campaign & Ad Group Mapping
             </h3>
 
-            {isLoadingCampaigns ? (
+            {isLoadingCampaigns || isLinkingCustomer ? (
                 <div className="p-8 text-center text-gray-500 bg-white rounded-lg border border-gray-200">
                     Loading Campaigns...
                 </div>
             ) : (
                 <div className="grid gap-6">
-                    {project.categories.map(category => (
+                    {sortedCategories.map(category => (
                         <CategoryMapper
                             key={category.id}
                             projectId={project.id}
@@ -55,15 +61,9 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
         mutationFn: (campaignId: string) => googleAdsService.linkCategoryToCampaign(category.id, campaignId),
 
         onMutate: async (newCampaignId) => {
-            // 1. Cancel Project Sync
             await queryClient.cancelQueries({ queryKey: ['project', projectId] });
-
-            // 2. ▼▼▼ FIX: Instant Cache Eviction for Ad Groups ▼▼▼
-            // Immediately remove cached ad groups for this category.
-            // This ensures the dropdowns below become empty/loading INSTANTLY.
             await queryClient.removeQueries({ queryKey: ['google-ads-adgroups', category.id] });
 
-            // 3. Optimistic UI Update
             const previousProject = queryClient.getQueryData<Project>(['project', projectId]);
             if (previousProject) {
                 queryClient.setQueryData<Project>(['project', projectId], {
@@ -89,13 +89,17 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
             }
             alert("Failed to link campaign.");
         },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-            queryClient.invalidateQueries({ queryKey: ['google-ads-adgroups', category.id] });
+        onSettled: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+            await queryClient.invalidateQueries({ queryKey: ['google-ads-adgroups', category.id] });
         }
     });
 
     const currentOption = campaignOptions.find(c => c.id === category.google_campaign_id) || null;
+
+    const sortedGroups = useMemo(() => {
+        return [...category.groups].sort((a, b) => a.name.localeCompare(b.name));
+    }, [category.groups]);
 
     return (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
@@ -113,8 +117,14 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
                             value={currentOption}
                             onChange={(opt) => {
                                 if (!opt) return;
+
                                 if (category.google_campaign_id && opt.id !== category.google_campaign_id) {
-                                    if(!confirm("Changing campaign will reset ad group links. Continue?")) return;
+                                    // ▼▼▼ SMART CHECK: Only warn if we actually have group links to lose ▼▼▼
+                                    const hasAdGroupLinks = category.groups.some(grp => grp.google_ad_group_id);
+
+                                    if (hasAdGroupLinks) {
+                                        if(!confirm("Changing campaign will reset ad group links. Continue?")) return;
+                                    }
                                 }
                                 linkCampaignMutation.mutate(opt.id);
                             }}
@@ -128,13 +138,14 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
             <div className="p-6 bg-white">
                 {category.google_campaign_id ? (
                     <div className="space-y-4">
-                        {category.groups.map(group => (
+                        {sortedGroups.map(group => (
                             <GroupMapper
                                 key={group.id}
                                 projectId={projectId}
                                 categoryId={category.id}
                                 currentCampaignId={category.google_campaign_id!}
                                 group={group}
+                                isParentLinking={linkCampaignMutation.isPending}
                             />
                         ))}
                     </div>
@@ -153,16 +164,17 @@ interface GroupMapperProps {
     categoryId: string;
     currentCampaignId: string;
     group: Group;
+    isParentLinking: boolean;
 }
 
-const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, currentCampaignId, group }) => {
+const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, currentCampaignId, group, isParentLinking }) => {
     const queryClient = useQueryClient();
 
     const { data: adGroupData, isLoading } = useQuery({
         queryKey: ['google-ads-adgroups', categoryId, currentCampaignId],
         queryFn: () => googleAdsService.getAdGroups(categoryId),
         staleTime: 1000 * 60 * 5,
-        enabled: !!currentCampaignId
+        enabled: !!currentCampaignId && !isParentLinking
     });
 
     const linkAdGroupMutation = useMutation({
@@ -216,8 +228,8 @@ const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, curren
             </div>
 
             <div className="w-80">
-                {isLoading ? (
-                    <div className="h-[38px] w-full bg-gray-100 rounded animate-pulse" />
+                {isLoading || isParentLinking ? (
+                    <div className="h-[38px] w-full bg-gray-100 rounded animate-pulse border border-gray-200" />
                 ) : (
                     <SearchableSelect
                         instanceId={`adgroup-select-${group.id}`}

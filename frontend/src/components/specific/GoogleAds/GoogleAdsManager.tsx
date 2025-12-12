@@ -1,22 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { HiArrowRight, HiOutlineTemplate } from 'react-icons/hi';
+import { HiArrowRight, HiOutlineTemplate, HiSparkles, HiRefresh } from 'react-icons/hi';
 import { FcGoogle } from 'react-icons/fc';
-import { useNavigate } from 'react-router-dom'; // Import navigate
+import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query'; // Import Query hooks
 import PageLayout from '../../common/PageLayout/PageLayout';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useProject } from '../../../contexts/ProjectContext';
 import { useProjectSync } from '../CategoryManagement/hooks/useProjectSync';
 import ProjectSelector from '../CategoryManagement/components/ProjectSelector';
+import { googleAdsService } from '../../../api/services/googleAdsService'; // Import Service
 
 // Components
 import CustomerLinker from './components/CustomerLinker';
 import MappingSection from './components/MappingSection';
 
 const GoogleAdsManager: React.FC = () => {
-    const navigate = useNavigate(); // Hook for navigation
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { user } = useAuth();
     const { currentProjectId, setCurrentProjectId } = useProject();
+
+    // State to coordinate the race condition for manual linking
+    const [isLinkingCustomer, setIsLinkingCustomer] = useState(false);
 
     const {
         projects,
@@ -28,6 +34,26 @@ const GoogleAdsManager: React.FC = () => {
     } = useProjectSync(currentProjectId);
 
     const isLinked = user?.is_google_ads_linked;
+
+    // --- AUTO-LINKING MUTATION ---
+    const autoLinkMutation = useMutation({
+        mutationFn: (projectId: string) => googleAdsService.autoLinkProject(projectId),
+        onSuccess: async (data) => {
+            // 1. Refresh the project tree to show new links
+            await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+
+            // 2. Also refresh dropdown caches so they know about the new campaign contexts
+            await queryClient.invalidateQueries({ queryKey: ['google-ads-campaigns'] });
+            await queryClient.invalidateQueries({ queryKey: ['google-ads-adgroups'] });
+
+            // 3. User Feedback
+            alert(`Auto-Linking Complete!\n\nMatched ${data.categories_matched} Categories\nMatched ${data.groups_matched} Groups`);
+        },
+        onError: (error: any) => {
+            console.error("Auto-link failed", error);
+            alert("Auto-linking failed. Please ensure your project is linked to a valid Customer Account.");
+        }
+    });
 
     const linkGoogleAds = useGoogleLogin({
         flow: 'auth-code',
@@ -60,6 +86,14 @@ const GoogleAdsManager: React.FC = () => {
             if (id === currentProjectId) setCurrentProjectId(null);
         } catch (e) {
             console.error("Failed to delete project");
+        }
+    };
+
+    const handleAutoLink = () => {
+        if (currentProjectId) {
+            if (window.confirm("This will use AI to automatically match your Categories and Groups to Google Ads Campaigns and Ad Groups based on name similarity.\n\nContinue?")) {
+                autoLinkMutation.mutate(currentProjectId);
+            }
         }
     };
 
@@ -115,9 +149,36 @@ const GoogleAdsManager: React.FC = () => {
                                 onDelete={handleDeleteProject}
                             />
                         </div>
+
+                        {/* ▼▼▼ NEW: Auto-Link Button (Right Side) ▼▼▼ */}
+                        {/* Only show if project is active and customer is linked */}
+                        {activeProject && activeProject.linked_customer_id && (
+                            <button
+                                onClick={handleAutoLink}
+                                disabled={autoLinkMutation.isPending}
+                                className={`
+                                    flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all
+                                    ${autoLinkMutation.isPending
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-teal-600 hover:border-teal-200'}
+                                `}
+                                title="Automatically match categories and groups using AI"
+                            >
+                                {autoLinkMutation.isPending ? (
+                                    <>
+                                        <HiRefresh className="animate-spin" size={18} />
+                                        <span>Matching...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <HiSparkles className={autoLinkMutation.isPending ? "" : "text-teal-500"} size={18} />
+                                        <span>Auto-Match with AI</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
 
-                    {/* Main Content Area */}
                     {isLoadingActive ? (
                         <div className="flex items-center justify-center h-64 text-gray-400">
                             Loading Project Data...
@@ -131,9 +192,11 @@ const GoogleAdsManager: React.FC = () => {
                     ) : activeProject ? (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-                            <CustomerLinker activeProject={activeProject} />
+                            <CustomerLinker
+                                activeProject={activeProject}
+                                onLinkingStateChange={setIsLinkingCustomer}
+                            />
 
-                            {/* ▼▼▼ FIX: Handle Empty Project State ▼▼▼ */}
                             {activeProject.categories.length === 0 ? (
                                 <div className="text-center py-16 bg-white rounded-lg border border-dashed border-gray-300">
                                     <HiOutlineTemplate className="mx-auto h-12 w-12 text-gray-300 mb-4" />
@@ -150,7 +213,10 @@ const GoogleAdsManager: React.FC = () => {
                                     </button>
                                 </div>
                             ) : activeProject.linked_customer_id ? (
-                                <MappingSection project={activeProject} />
+                                <MappingSection
+                                    project={activeProject}
+                                    isLinkingCustomer={isLinkingCustomer}
+                                />
                             ) : (
                                 <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300 text-gray-500 shadow-sm">
                                     <p className="font-medium">Link a Customer Account above to enable Campaign Mapping.</p>

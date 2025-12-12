@@ -7,9 +7,10 @@ import SearchableSelect from '../../../common/SearchableSelect/SearchableSelect'
 
 interface Props {
     activeProject: Project;
+    onLinkingStateChange: (isLinking: boolean) => void;
 }
 
-const CustomerLinker: React.FC<Props> = ({ activeProject }) => {
+const CustomerLinker: React.FC<Props> = ({ activeProject, onLinkingStateChange }) => {
     const queryClient = useQueryClient();
 
     const [selectedOption, setSelectedOption] = useState<SelectOption | null>(null);
@@ -46,27 +47,63 @@ const CustomerLinker: React.FC<Props> = ({ activeProject }) => {
     const linkCustomerMutation = useMutation({
         mutationFn: (customerId: string) => googleAdsService.linkProjectToCustomer(activeProject.id, customerId),
 
-        // ▼▼▼ FIX: Instant Cache Eviction ▼▼▼
-        onMutate: async () => {
-            // Immediately wipe downstream data.
-            // This guarantees the UI cannot show "Old Customer's Campaigns" for even 1 millisecond.
+        onMutate: async (newCustomerId) => {
+            onLinkingStateChange(true);
+
+            await queryClient.cancelQueries({ queryKey: ['project', activeProject.id] });
             await queryClient.removeQueries({ queryKey: ['google-ads-campaigns'] });
             await queryClient.removeQueries({ queryKey: ['google-ads-adgroups'] });
+
+            const previousProject = queryClient.getQueryData<Project>(['project', activeProject.id]);
+
+            if (previousProject) {
+                queryClient.setQueryData<Project>(['project', activeProject.id], {
+                    ...previousProject,
+                    linked_customer_id: newCustomerId,
+                    categories: previousProject.categories.map(cat => ({
+                        ...cat,
+                        google_campaign_id: null,
+                        groups: cat.groups.map(grp => ({
+                            ...grp,
+                            google_ad_group_id: null
+                        }))
+                    }))
+                });
+            }
+
+            return { previousProject };
         },
 
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ['project', activeProject.id] });
             setIsEditing(false);
         },
-        onError: () => alert("Failed to link customer.")
+        onError: (_err, _newVal, context) => {
+            if (context?.previousProject) {
+                queryClient.setQueryData(['project', activeProject.id], context.previousProject);
+            }
+            alert("Failed to link customer.");
+        },
+        onSettled: () => {
+            onLinkingStateChange(false);
+        }
     });
 
     const handleSave = () => {
         if (!selectedOption) return;
 
+        // Check if we are changing an existing link
         if (activeProject.linked_customer_id && activeProject.linked_customer_id !== selectedOption.id) {
-            if (!window.confirm("Warning: Changing the Customer Account will RESET all Campaign and Ad Group links in this project. Are you sure?")) {
-                return;
+
+            // ▼▼▼ SMART CHECK: Only warn if we actually have downstream data to lose ▼▼▼
+            const hasDownstreamLinks = activeProject.categories.some(cat =>
+                cat.google_campaign_id || cat.groups.some(grp => grp.google_ad_group_id)
+            );
+
+            if (hasDownstreamLinks) {
+                if (!window.confirm("Warning: Changing the Customer Account will RESET all Campaign and Ad Group links in this project. Are you sure?")) {
+                    return;
+                }
             }
         }
 

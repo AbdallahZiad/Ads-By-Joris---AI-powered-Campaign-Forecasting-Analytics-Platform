@@ -34,5 +34,13 @@ export const googleAdsService = {
     // 6. Link Group -> Ad Group
     linkGroupToAdGroup: async (groupId: string, adGroupId: string) => {
         return apiClient.put(`/api/v1/projects/groups/${groupId}/link-ad-group`, { ad_group_id: adGroupId });
+    },
+
+    // 7. ▼▼▼ NEW: AI Auto-Linking ▼▼▼
+    autoLinkProject: async (projectId: string) => {
+        return apiClient.post<{ categories_matched: number, groups_matched: number }>(
+            `/api/v1/projects/${projectId}/auto-link`,
+            {} // Empty body
+        );
     }
 };
