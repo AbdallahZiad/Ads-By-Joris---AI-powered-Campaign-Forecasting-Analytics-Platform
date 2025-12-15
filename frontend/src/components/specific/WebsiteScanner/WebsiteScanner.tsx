@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiCheck } from 'react-icons/hi';
+import { HiCheck, HiFolderDownload } from 'react-icons/hi'; // Added Icon
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import styles from './WebsiteScanner.module.css';
 import { ScannerConfig, ScannerResponse, Category, CreateProjectTreePayload } from '../../../types';
 import { useScanner } from '../../../hooks/useScanner';
@@ -19,11 +19,21 @@ const WebsiteScanner: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const queryClient = useQueryClient();
-    const { setCurrentProjectId } = useProject();
+    const { setCurrentProjectId, currentProjectId } = useProject();
 
-    // Check if we are here to replace an empty project
-    const replaceProjectId = location.state?.replaceProjectId;
-    const replaceProjectTitle = location.state?.replaceProjectTitle; // ▼▼▼ GET TITLE
+    // 1. Fetch the active project to see if it's empty
+    const { data: activeProject } = useQuery({
+        queryKey: ['project', currentProjectId],
+        queryFn: () => projectService.getProject(currentProjectId!),
+        enabled: !!currentProjectId,
+        staleTime: 1000 * 60
+    });
+
+    // 2. Determine Replacement Target
+    const isContextProjectEmpty = activeProject?.categories.length === 0;
+
+    const targetReplaceId = location.state?.replaceProjectId || (isContextProjectEmpty ? currentProjectId : undefined);
+    const targetReplaceTitle = location.state?.replaceProjectTitle || (isContextProjectEmpty ? activeProject?.title : undefined);
 
     const [config, setConfig] = useState<ScannerConfig>({
         start_url: '',
@@ -44,9 +54,9 @@ const WebsiteScanner: React.FC = () => {
         mutationFn: projectService.createProjectTree,
         onSuccess: async (newProject) => {
             // 1. If we are replacing an old empty project, delete it now
-            if (replaceProjectId) {
+            if (targetReplaceId) {
                 try {
-                    await projectService.deleteProject(replaceProjectId);
+                    await projectService.deleteProject(targetReplaceId);
                 } catch (e) {
                     console.warn("Failed to clean up old project during replacement", e);
                 }
@@ -106,9 +116,9 @@ const WebsiteScanner: React.FC = () => {
     const handleAccept = () => {
         if (!scanResult) return;
 
-        let projectTitle = replaceProjectTitle;
+        // Use the old name if we are replacing, otherwise generate one
+        let projectTitle = targetReplaceTitle;
 
-        // Only generate new title if we aren't replacing an existing one
         if (!projectTitle) {
             let titleDomain = config.start_url.replace(/^https?:\/\//, '').replace(/^www\./, '');
             if (titleDomain.includes('/')) titleDomain = titleDomain.split('/')[0];
@@ -175,12 +185,23 @@ const WebsiteScanner: React.FC = () => {
                         >
                             <div className={styles.resultsHeader}>
                                 <h2 className="text-xl font-bold text-gray-800">Extracted Keyword Hierarchy</h2>
-                                <button
-                                    className={styles.statsButton}
-                                    onClick={() => setShowStats(!showStats)}
-                                >
-                                    {showStats ? 'Hide Metrics' : 'View Crawl Metrics'}
-                                </button>
+                                <div className="flex items-center gap-3">
+
+                                    {/* ▼▼▼ UPDATED: Elegant Indigo Context Badge ▼▼▼ */}
+                                    {targetReplaceTitle && (
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
+                                            <HiFolderDownload size={14} className="text-indigo-500" />
+                                            <span>Populating: <span className="underline decoration-indigo-200 underline-offset-2">{targetReplaceTitle}</span></span>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        className={styles.statsButton}
+                                        onClick={() => setShowStats(!showStats)}
+                                    >
+                                        {showStats ? 'Hide Metrics' : 'View Crawl Metrics'}
+                                    </button>
+                                </div>
                             </div>
 
                             <AnimatePresence>
@@ -257,7 +278,7 @@ const WebsiteScanner: React.FC = () => {
                                     ) : (
                                         <>
                                             <HiCheck className="inline mr-1" size={16} />
-                                            Import Hierarchy
+                                            {targetReplaceId ? 'Populate Project' : 'Import Hierarchy'}
                                         </>
                                     )}
                                 </button>

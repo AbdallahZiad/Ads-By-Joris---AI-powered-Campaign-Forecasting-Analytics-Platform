@@ -35,7 +35,7 @@ const CategoryManagement: React.FC = () => {
         isLoadingActive,
         createProject,
         updateProject,
-        deleteProject, // Imported
+        deleteProject,
         createCategory,
         updateCategory,
         deleteCategory,
@@ -94,7 +94,6 @@ const CategoryManagement: React.FC = () => {
     const handleDeleteProject = async (id: string) => {
         try {
             await deleteProject(id);
-            // If the deleted project was the active one, clear selection
             if (id === currentProjectId) {
                 setCurrentProjectId(null);
             }
@@ -163,15 +162,23 @@ const CategoryManagement: React.FC = () => {
 
     const handleFooterRunAnalysis = () => {
         const selection: CategoryType[] = [];
+
         categories.forEach(cat => {
             const selectedGroupsForCategory: GroupType[] = [];
+
             cat.groups.forEach(group => {
                 const groupKeywordSelections = selectedKeywordsByGroup.get(group.id);
+
+                // This check now works correctly because `groupKeywordSelections` contains strings,
+                // and `k.text` is a string.
                 if (groupKeywordSelections && groupKeywordSelections.size > 0) {
                     const filteredKeywords = group.keywords.filter(k => groupKeywordSelections.has(k.text));
-                    selectedGroupsForCategory.push({ ...group, keywords: filteredKeywords });
+                    if (filteredKeywords.length > 0) {
+                        selectedGroupsForCategory.push({ ...group, keywords: filteredKeywords });
+                    }
                 }
             });
+
             if (selectedGroupsForCategory.length > 0) {
                 selection.push({ ...cat, groups: selectedGroupsForCategory });
             }
@@ -239,7 +246,7 @@ const CategoryManagement: React.FC = () => {
                                 onSelect={setCurrentProjectId}
                                 onCreate={handleCreateProject}
                                 onRename={handleRenameProject}
-                                onDelete={handleDeleteProject} // ▼▼▼ FIXED: Passed prop here
+                                onDelete={handleDeleteProject}
                             />
                         </div>
 

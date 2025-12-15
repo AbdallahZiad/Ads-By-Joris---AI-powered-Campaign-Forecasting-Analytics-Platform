@@ -4,7 +4,6 @@ export interface Keyword {
     id: string;
     text: string;
     isNew?: boolean;
-    // ▼▼▼ NEW ▼▼▼
     applied_labels?: string[];
 }
 
@@ -13,7 +12,6 @@ export interface Group {
     name: string;
     keywords: Keyword[];
     google_ad_group_id?: string | null;
-    // ▼▼▼ NEW ▼▼▼
     applied_labels?: string[];
 }
 
@@ -22,7 +20,6 @@ export interface Category {
     name: string;
     groups: Group[];
     google_campaign_id?: string | null;
-    // ▼▼▼ NEW ▼▼▼
     applied_labels?: string[];
 }
 
@@ -73,7 +70,7 @@ export interface AdGroupListResponse {
     ad_groups: GoogleAdsAdGroup[];
 }
 
-// --- Labeling Report (New) ---
+// --- Labeling Report ---
 
 export interface LabelStats {
     count: number;
@@ -115,7 +112,7 @@ export interface SelectOption {
     name: string;
 }
 
-// --- Analysis & Scanner Types (Unchanged) ---
+// --- Analysis & Scanner Types ---
 export type CompetitionLevel = "UNSPECIFIED" | "UNKNOWN" | "LOW" | "MEDIUM" | "HIGH";
 export type Month = "UNSPECIFIED" | "JANUARY" | "FEBRUARY" | "MARCH" | "APRIL" | "MAY" | "JUNE" | "JULY" | "AUGUST" | "SEPTEMBER" | "OCTOBER" | "NOVEMBER" | "DECEMBER";
 
@@ -185,6 +182,25 @@ export interface AnalyzedCategory {
     groups: AnalyzedGroup[];
 }
 
+// ▼▼▼ NEW: Aggregation Types for Drill-Down UI ▼▼▼
+
+export interface AggregatedStats {
+    id: string;
+    name: string; // Category or Group Name
+    type: 'CATEGORY' | 'GROUP';
+    itemCount: number; // Number of keywords
+    totalVolume: number;
+    avgCpc: number;
+    avgCompetition: number;
+    maxGrowth: number; // For the "Top Trend" column
+    labels: string[]; // For visualizing AI tags at high level
+    // Reference to original object for drilling down
+    originalRef: AnalyzedCategory | AnalyzedGroup;
+}
+
+export type ViewLevel = 'ROOT' | 'CATEGORY' | 'GROUP';
+
+// --- Scanner Types (Unchanged) ---
 export interface ScannerConfig {
     start_url: string;
     max_pages: number;

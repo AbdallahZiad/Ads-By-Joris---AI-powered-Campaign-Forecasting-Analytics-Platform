@@ -4,6 +4,7 @@ import { Category } from '../../../../types';
 export const useCategorySelection = (categories: Category[], initialImportData?: Category[]) => {
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+    // Maps GroupID -> Set of Keyword TEXT strings
     const [selectedKeywordsByGroup, setSelectedKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
 
     // Reset selection on new import
@@ -30,7 +31,8 @@ export const useCategorySelection = (categories: Category[], initialImportData?:
             newSelectedCatIds.add(categoryId);
             category.groups.forEach(g => {
                 newSelectedGroupIds.add(g.id);
-                newSelectedKeywordsMap.set(g.id, new Set(g.keywords));
+                // ▼▼▼ FIX: Map keyword objects to text strings ▼▼▼
+                newSelectedKeywordsMap.set(g.id, new Set(g.keywords.map(k => k.text)));
             });
         } else {
             newSelectedCatIds.delete(categoryId);
@@ -54,7 +56,9 @@ export const useCategorySelection = (categories: Category[], initialImportData?:
 
         if (isSelected) {
             newSelectedGroupIds.add(groupId);
-            newSelectedKeywordsMap.set(groupId, new Set(group.keywords));
+            // ▼▼▼ FIX: Map keyword objects to text strings ▼▼▼
+            newSelectedKeywordsMap.set(groupId, new Set(group.keywords.map(k => k.text)));
+
             if (category.groups.every(g => newSelectedGroupIds.has(g.id))) {
                 newSelectedCatIds.add(categoryId);
             }
@@ -86,13 +90,16 @@ export const useCategorySelection = (categories: Category[], initialImportData?:
         if (!category || !group) return;
 
         if (isSelected) {
-            if (group.keywords.every(k => groupKeywords.has(k))) {
+            // Check if ALL keywords in the group are now selected
+            if (group.keywords.every(k => groupKeywords.has(k.text))) {
                 newSelectedGroupIds.add(groupId);
+                // Check if ALL groups in the category are now selected
                 if (category.groups.every(g => newSelectedGroupIds.has(g.id))) {
                     newSelectedCatIds.add(categoryId);
                 }
             }
         } else {
+            // If we deselected a keyword, the group (and category) are no longer fully selected
             newSelectedGroupIds.delete(groupId);
             newSelectedCatIds.delete(categoryId);
         }
@@ -110,7 +117,8 @@ export const useCategorySelection = (categories: Category[], initialImportData?:
             newSelectedCatIds.add(cat.id);
             cat.groups.forEach(group => {
                 newSelectedGroupIds.add(group.id);
-                newSelectedKeywordsMap.set(group.id, new Set(group.keywords));
+                // ▼▼▼ FIX: Map keyword objects to text strings ▼▼▼
+                newSelectedKeywordsMap.set(group.id, new Set(group.keywords.map(k => k.text)));
             });
         });
         setSelectedCategoryIds(newSelectedCatIds);
@@ -127,7 +135,7 @@ export const useCategorySelection = (categories: Category[], initialImportData?:
         toggleKeyword,
         selectAll,
         clearSelection,
-        setSelectedCategoryIds, // Exposed for sync updates (e.g. deletion cleanup)
+        setSelectedCategoryIds,
         setSelectedGroupIds,
         setSelectedKeywordsByGroup
     };
