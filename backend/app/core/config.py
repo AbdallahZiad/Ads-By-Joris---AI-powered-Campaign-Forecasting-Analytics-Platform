@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # OpenAI API
     OPENAI_API_KEY: str
 
+    # Celery / Redis
+    # Defaulting to localhost for development convenience
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days

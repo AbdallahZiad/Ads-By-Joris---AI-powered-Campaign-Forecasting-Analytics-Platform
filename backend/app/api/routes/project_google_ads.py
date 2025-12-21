@@ -15,6 +15,8 @@ from app.schemas.google_ads_user_schemas import (
     LinkGroupAdGroupRequest,
     LabelingReport
 )
+from app.schemas.task_schemas import TaskResponse
+from app.tasks import task_apply_labels # <--- IMPORT TASK
 from app.services.google_ads_user import UserGoogleAdsService
 from app.services.project_linking import ProjectLinkingService
 from app.services.labeling_service import LabelingService
@@ -132,7 +134,7 @@ async def auto_link_project_structure(
         current_user: CurrentUser,
         id: uuid.UUID
 ) -> Any:
-    """Run AI Auto-Linking."""
+    """Run AI Auto-Linking (Sync - Fast enough for now, can be moved to Async later if needed)."""
     project = _get_project_with_permission(session, current_user, id)
     linker = ProjectLinkingService(session, current_user)
     try:
@@ -140,20 +142,25 @@ async def auto_link_project_structure(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/{id}/apply-labels", response_model=LabelingReport)
+@router.post("/{id}/apply-labels", response_model=TaskResponse)
 async def apply_labels_to_project(
         *,
         session: SessionDep,
         current_user: CurrentUser,
         id: uuid.UUID
 ) -> Any:
-    """Run Intelligent Labeling Engine."""
-    project = _get_project_with_permission(session, current_user, id)
-    labeler = LabelingService(session, current_user)
-    try:
-        return await labeler.apply_labels_to_project(project)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """
+    Run Intelligent Labeling Engine (Async Task).
+    This is a heavy operation involving Forecasts + DB Updates + Google Sync.
+    """
+    # 1. Verify access immediately (Fail fast)
+    _get_project_with_permission(session, current_user, id)
+
+    # 2. Dispatch Task
+    # Pass IDs as strings, not objects
+    task = task_apply_labels.delay(str(id), str(current_user.id))
+
+    return TaskResponse(task_id=task.id)
 
 @router.delete("/{id}/labels", response_model=LabelingReport)
 async def remove_labels_from_project(
@@ -164,8 +171,8 @@ async def remove_labels_from_project(
 ) -> Any:
     """
     **Label Cleanup:** Removes all [Joris] labels from the project locally
-    and syncs the removal to Google Ads (Ad Groups & Campaigns).
-    Does NOT touch manual labels added by the user in Google Ads.
+    and syncs the removal to Google Ads.
+    (Kept synchronous for now as it's usually faster, but can be made async if timeouts occur)
     """
     project = _get_project_with_permission(session, current_user, id)
     labeler = LabelingService(session, current_user)

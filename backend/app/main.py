@@ -7,6 +7,11 @@ from fastapi.openapi.utils import get_openapi
 from app.api.main import api_router
 from app.core.config import settings
 
+# --- CRITICAL FIX: Import celery_app to ensure configuration is loaded ---
+# Even though we don't use 'celery_app' directly here, importing it
+# executes the configuration code in app/core/celery_app.py,
+# binding the shared_tasks to the correct Redis URL.
+from app.core.celery_app import celery_app
 
 def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"
@@ -33,7 +38,7 @@ if settings.all_cors_origins:
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# --- CUSTOM OPENAPI SCHEMA TO FIX OAUTH2 CONFUSION ---
+# --- CUSTOM OPENAPI SCHEMA ---
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
