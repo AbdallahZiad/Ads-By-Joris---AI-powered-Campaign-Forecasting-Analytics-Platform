@@ -1,125 +1,58 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Category, AnalyzedCategory, UnifiedKeywordResult, KeywordForecast, AnalyzedKeyword } from '../types';
-import { normalize } from '../utils/text';
-import { HistoryCache, ForecastCache, cacheHistoryBatch } from '../utils/cacheService';
-import { useAnalysis } from './useAnalysis';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { AnalyzedCategory, Category, GoogleAdsKeywordResponse, ForecastResponse, UnifiedKeywordResult } from '../types';
+import { analysisService } from '../api/services/analysisService';
+import { useTaskPoller } from './useTaskPoller';
+import { cacheService } from '../utils/cacheService';
 
-export const useKeywordAnalysis = (
-    selection: Category[],
-    countryId?: string,
-    languageId?: string
-) => {
-    const [historyData, setHistoryData] = useState<Map<string, UnifiedKeywordResult>>(new Map());
-    const [forecastData, setForecastData] = useState<Map<string, KeywordForecast>>(new Map());
+export const useKeywordAnalysis = (selection: Category[], countryId?: string, languageId?: string) => {
 
-    const { fetchHistory, fetchForecast } = useAnalysis();
-    const [loadingState, setLoadingState] = useState({ history: false, forecast: false });
+    // API State
+    const [freshHistory, setFreshHistory] = useState<GoogleAdsKeywordResponse | null>(null);
+    const [freshForecast, setFreshForecast] = useState<ForecastResponse | null>(null);
 
-    useEffect(() => {
-        const allKeywords = new Set<string>();
+    // Precise Loading States
+    const [isFetchingHistory, setIsFetchingHistory] = useState(true);
+    const [isForecasting, setIsForecasting] = useState(false); // Covers submitting + polling
 
-        // ▼▼▼ FIX: Handle Keyword Objects vs Strings ▼▼▼
-        selection.forEach(cat =>
-            cat.groups.forEach(grp =>
-                grp.keywords.forEach(k => {
-                    // Check if it's an object (new structure) or string (legacy/scan)
-                    const text = typeof k === 'string' ? k : k.text;
-                    allKeywords.add(text);
-                })
-            )
-        );
-        const keywordList = Array.from(allKeywords);
+    const hasStartedRef = useRef(false);
 
-        if (keywordList.length === 0 || !countryId || !languageId) return;
-
-        const runAnalysisPipeline = async () => {
-            console.log("HOOK: Starting Analysis Pipeline...", { count: keywordList.length, countryId, languageId });
-
-            // --- STEP 1: HISTORY ---
-            setLoadingState(prev => ({ ...prev, history: true }));
-
-            const currentSessionHistoryMap = new Map<string, UnifiedKeywordResult>();
-            const validHistoryForNextStep: UnifiedKeywordResult[] = [];
-
-            try {
-                // A. Retrieve Cached
-                keywordList.forEach(k => {
-                    const cachedMetrics = HistoryCache.get(k, countryId, languageId);
-                    if (cachedMetrics) {
-                        const result = { text: k, keyword_metrics: cachedMetrics };
-                        currentSessionHistoryMap.set(normalize(k), result);
-                        validHistoryForNextStep.push(result);
-                    }
-                });
-
-                // B. Fetch Missing
-                const missingForHistory = HistoryCache.getMissing(keywordList, countryId, languageId);
-
-                if (missingForHistory.length > 0) {
-                    const response = await fetchHistory({
-                        keywords: missingForHistory,
-                        languageId,
-                        countryId
-                    });
-
-                    cacheHistoryBatch(response.results, countryId, languageId);
-
-                    response.results.forEach(r => {
-                        currentSessionHistoryMap.set(normalize(r.text), r);
-                        validHistoryForNextStep.push(r);
-                    });
-                }
-
-                setHistoryData(currentSessionHistoryMap);
-                setLoadingState(prev => ({ ...prev, history: false }));
-
-            } catch (err) {
-                console.error("History pipeline failed", err);
-                setLoadingState(prev => ({ ...prev, history: false }));
-                return;
+    // --- Poller for Forecast Task ---
+    const poller = useTaskPoller<ForecastResponse>({
+        onSuccess: (result) => {
+            // Save to cache (Merge happens in service)
+            if (countryId && languageId) {
+                // We pass empty history array because we are only updating forecasts here
+                cacheService.saveBatch(countryId, languageId, [], result.forecasts);
             }
+            setFreshForecast(result);
+            setIsForecasting(false);
+        },
+        onError: (err) => {
+            console.error("Forecast task failed", err);
+            setIsForecasting(false);
+            alert("Forecast Analysis failed. Please try again.");
+        }
+    });
 
-            // --- STEP 2: FORECAST ---
-            setLoadingState(prev => ({ ...prev, forecast: true }));
+    // --- Data Merging Logic (Reactive) ---
+    // Builds the final tree from Cache + Fresh Data
+    const analyzedCategories = useMemo<AnalyzedCategory[]>(() => {
+        if (!selection || !countryId || !languageId) return [];
 
-            try {
-                const currentSessionForecastMap = new Map<string, KeywordForecast>();
-                const keywordsNeedingForecast: UnifiedKeywordResult[] = [];
+        const allKeywords = selection.flatMap(c => c.groups.flatMap(g => g.keywords.map(k => k.text)));
+        const { found: cachedMap } = cacheService.getBatch(allKeywords, countryId, languageId);
 
-                validHistoryForNextStep.forEach(historyItem => {
-                    const cachedForecast = ForecastCache.get(historyItem.text, countryId, languageId);
+        const getData = (text: string) => {
+            const freshHistItem = freshHistory?.results.find(h => h.text === text)?.keyword_metrics;
+            const freshFcItem = freshForecast?.forecasts.find(f => f.keyword === text);
+            const cachedItem = cachedMap.get(text);
 
-                    if (cachedForecast) {
-                        currentSessionForecastMap.set(normalize(historyItem.text), cachedForecast);
-                    } else if (historyItem.keyword_metrics !== null) {
-                        keywordsNeedingForecast.push(historyItem);
-                    }
-                });
-
-                if (keywordsNeedingForecast.length > 0) {
-                    const forecastResponse = await fetchForecast(keywordsNeedingForecast);
-
-                    forecastResponse.forecasts.forEach(fc => {
-                        ForecastCache.set(fc.keyword, countryId, languageId, fc);
-                        currentSessionForecastMap.set(normalize(fc.keyword), fc);
-                    });
-                }
-
-                setForecastData(currentSessionForecastMap);
-
-            } catch (err) {
-                console.error("Forecast pipeline failed", err);
-            } finally {
-                setLoadingState(prev => ({ ...prev, forecast: false }));
-            }
+            return {
+                history: freshHistItem || cachedItem?.history || null,
+                forecast: freshFcItem || cachedItem?.forecast || null
+            };
         };
 
-        runAnalysisPipeline();
-
-    }, [selection, countryId, languageId, fetchHistory, fetchForecast]);
-
-    // The "Inflator"
-    const analyzedCategories: AnalyzedCategory[] = useMemo(() => {
         return selection.map(cat => ({
             id: cat.id,
             name: cat.name,
@@ -127,31 +60,111 @@ export const useKeywordAnalysis = (
                 id: grp.id,
                 name: grp.name,
                 keywords: grp.keywords.map(k => {
-                    // ▼▼▼ FIX: Handle Object Property Access ▼▼▼
-                    const text = typeof k === 'string' ? k : k.text;
-                    const kNorm = normalize(text);
-
-                    const historyResult = historyData.get(kNorm);
-                    const historyEntry = loadingState.history
-                        ? undefined
-                        : (historyResult ? historyResult.keyword_metrics : null);
-
-                    const forecastEntry = loadingState.forecast
-                        ? undefined
-                        : (forecastData.get(kNorm) || null);
-
+                    const data = getData(k.text);
                     return {
-                        text: text,
-                        history: historyEntry,
-                        forecast: forecastEntry
-                    } as AnalyzedKeyword;
+                        text: k.text,
+                        history: data.history,
+                        forecast: data.forecast
+                    };
                 })
             }))
         }));
-    }, [selection, historyData, forecastData, loadingState]);
+    }, [selection, countryId, languageId, freshHistory, freshForecast]);
+
+    // --- Main Orchestrator ---
+    useEffect(() => {
+        const executeAnalysisChain = async () => {
+            if (!selection || selection.length === 0 || !countryId || !languageId || hasStartedRef.current) return;
+
+            hasStartedRef.current = true;
+            setIsFetchingHistory(true);
+
+            try {
+                const allKeywords = Array.from(new Set(
+                    selection.flatMap(c => c.groups.flatMap(g => g.keywords.map(k => k.text)))
+                ));
+
+                // 1. Check Cache
+                const { found: cachedMap } = cacheService.getBatch(allKeywords, countryId, languageId);
+
+                // 2. Identify Missing Data
+                const missingHistory = allKeywords.filter(k => !cachedMap.get(k)?.history);
+                const missingForecast = allKeywords.filter(k => !cachedMap.get(k)?.forecast);
+
+                // --- PHASE 1: HISTORY ---
+                let currentHistoryData: GoogleAdsKeywordResponse | null = null;
+
+                if (missingHistory.length > 0) {
+                    const historyResponse = await analysisService.fetchHistoricalMetrics(
+                        missingHistory,
+                        languageId,
+                        countryId
+                    );
+                    setFreshHistory(historyResponse);
+
+                    // Save history immediately so we don't lose it if forecast fails
+                    cacheService.saveBatch(countryId, languageId, historyResponse.results, []);
+
+                    currentHistoryData = historyResponse;
+                }
+
+                // Done with History Phase
+                setIsFetchingHistory(false);
+
+                // --- PHASE 2: FORECAST ---
+                if (missingForecast.length > 0) {
+                    setIsForecasting(true);
+
+                    // We need to build a full payload for the Forecast AI.
+                    // This includes History for the keywords we want to forecast.
+                    // Source can be: Newly fetched history OR Cached history.
+
+                    const payloadResults: UnifiedKeywordResult[] = missingForecast.map(kw => {
+                        // Try fresh first
+                        const freshMetric = currentHistoryData?.results.find(r => r.text === kw)?.keyword_metrics;
+                        // Fallback to cache
+                        const cachedMetric = cachedMap.get(kw)?.history;
+
+                        return {
+                            text: kw,
+                            keyword_metrics: freshMetric || cachedMetric || null
+                        };
+                    }).filter(item => item.keyword_metrics !== null); // Ensure we only send valid data
+
+                    if (payloadResults.length > 0) {
+                        const taskResponse = await analysisService.startForecast({
+                            google_ads_data: { results: payloadResults },
+                            forecast_months: 12
+                        });
+                        // Hand off to poller
+                        poller.startPolling(taskResponse.task_id);
+                    } else {
+                        // Should not happen if logic is correct, but safe exit
+                        setIsForecasting(false);
+                    }
+                }
+
+            } catch (err) {
+                console.error("Analysis chain failed", err);
+                setIsFetchingHistory(false);
+                setIsForecasting(false);
+                alert("Failed to retrieve data.");
+            }
+        };
+
+        executeAnalysisChain();
+
+        return () => {
+            poller.stopPolling();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return {
         analyzedCategories,
-        isLoading: loadingState
+        isLoading: {
+            history: isFetchingHistory,
+            forecast: isForecasting || poller.isLoading
+        }
     };
 };

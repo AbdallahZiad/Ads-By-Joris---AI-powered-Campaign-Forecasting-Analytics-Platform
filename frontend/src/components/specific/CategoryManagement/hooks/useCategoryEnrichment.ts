@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Group } from '../../../../types'; // Ensure Group is imported from the fixed types.ts
-import { cacheHistoryBatch } from '../../../../utils/cacheService';
+import { Group } from '../../../../types';
+import { cacheService } from '../../../../utils/cacheService'; // ▼▼▼ FIX: Import new service
 import { useEnrichment } from '../../../../hooks/useEnrichment';
 
 interface Props {
@@ -41,7 +41,9 @@ export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSel
                 countryId
             });
 
-            cacheHistoryBatch(response.results, countryId, languageId);
+            // ▼▼▼ FIX: Use the new cacheService.saveBatch method ▼▼▼
+            // We pass [] for forecasts because enrichment only fetches history.
+            cacheService.saveBatch(countryId, languageId, response.results, []);
 
             // Create a set of existing keyword TEXTs
             const oldKeywordsSet = new Set(group.keywords.map(k => k.text));

@@ -1,81 +1,101 @@
-import { KeywordHistoricalMetrics, KeywordForecast, UnifiedKeywordResult } from '../types';
-import { normalize } from './text';
+import { KeywordHistoricalMetrics, KeywordForecast } from '../types';
 
-interface CacheEntry<T> {
-    data: T;
-    timestamp: number; // Epoch time
+interface CachedItem {
+    history: KeywordHistoricalMetrics | null;
+    forecast: KeywordForecast | null;
+    timestamp: number;
 }
 
-// Composite key separator
-const SEP = '||';
+const CACHE_PREFIX = 'kwa_v1';
 
-class KeywordDataCache<T> {
-    private cache = new Map<string, CacheEntry<T>>();
+const getCurrentMonthKey = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${now.getMonth() + 1}`;
+};
 
-    /**
-     * Generates a unique key based on Keyword + Geo + Lang
-     */
-    private makeKey(keyword: string, countryId: string, languageId: string): string {
-        return `${normalize(keyword)}${SEP}${countryId}${SEP}${languageId}`;
-    }
+export const cacheService = {
+    getKey: (keyword: string, countryId: string, languageId: string) => {
+        const kwSafe = btoa(unescape(encodeURIComponent(keyword)));
+        return `${CACHE_PREFIX}_${countryId}_${languageId}_${getCurrentMonthKey()}_${kwSafe}`;
+    },
 
-    /**
-     * Checks if the cached data is still valid (Same Month & Year)
-     */
-    private isFresh(timestamp: number): boolean {
-        const cachedDate = new Date(timestamp);
-        const now = new Date();
+    getItem: (keyword: string, countryId: string, languageId: string): CachedItem | null => {
+        const key = cacheService.getKey(keyword, countryId, languageId);
+        const stored = localStorage.getItem(key);
+        if (!stored) return null;
+        try {
+            return JSON.parse(stored) as CachedItem;
+        } catch (e) {
+            return null;
+        }
+    },
 
-        return (
-            cachedDate.getMonth() === now.getMonth() &&
-            cachedDate.getFullYear() === now.getFullYear()
-        );
-    }
+    getBatch: (keywords: string[], countryId: string, languageId: string) => {
+        const found = new Map<string, CachedItem>();
+        const missing: string[] = [];
 
-    set(keyword: string, countryId: string, languageId: string, data: T) {
-        const key = this.makeKey(keyword, countryId, languageId);
-        this.cache.set(key, {
-            data,
-            timestamp: Date.now()
+        keywords.forEach(kw => {
+            const item = cacheService.getItem(kw, countryId, languageId);
+            if (item) {
+                found.set(kw, item);
+            } else {
+                missing.push(kw);
+            }
+        });
+
+        return { found, missing };
+    },
+
+    setItem: (
+        keyword: string,
+        countryId: string,
+        languageId: string,
+        history: KeywordHistoricalMetrics | null,
+        forecast: KeywordForecast | null
+    ) => {
+        const key = cacheService.getKey(keyword, countryId, languageId);
+        const data: CachedItem = { history, forecast, timestamp: Date.now() };
+        localStorage.setItem(key, JSON.stringify(data));
+    },
+
+    // ▼▼▼ FIX: Partial Merge Strategy ▼▼▼
+    saveBatch: (
+        countryId: string,
+        languageId: string,
+        historyResults: any[], // UnifiedKeywordResult[]
+        forecastResults: any[] // KeywordForecast[]
+    ) => {
+        const historyMap = new Map(historyResults.map(h => [h.text, h.keyword_metrics]));
+        const forecastMap = new Map(forecastResults.map(f => [f.keyword, f]));
+
+        const allKeywords = new Set([...historyMap.keys(), ...forecastMap.keys()]);
+
+        allKeywords.forEach(kw => {
+            // 1. Get existing to prevent overwriting known data with null
+            const existing = cacheService.getItem(kw, countryId, languageId);
+
+            // 2. Resolve final values (New > Existing > Null)
+            // If historyMap has it (even if null?), use it. If not, fallback to existing.
+            // Note: We assume if the key is present in the map, it's an update.
+
+            const newHistory = historyMap.has(kw) ? historyMap.get(kw) : existing?.history;
+            const newForecast = forecastMap.has(kw) ? forecastMap.get(kw) : existing?.forecast;
+
+            cacheService.setItem(
+                kw,
+                countryId,
+                languageId,
+                newHistory || null,
+                newForecast || null
+            );
+        });
+    },
+
+    clearAll: () => {
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith(CACHE_PREFIX)) {
+                localStorage.removeItem(key);
+            }
         });
     }
-
-    get(keyword: string, countryId: string, languageId: string): T | undefined {
-        const key = this.makeKey(keyword, countryId, languageId);
-        const entry = this.cache.get(key);
-
-        if (!entry) return undefined;
-
-        // "Freshness" check: If month changed, treat as missing (return undefined)
-        if (!this.isFresh(entry.timestamp)) {
-            this.cache.delete(key);
-            return undefined;
-        }
-
-        return entry.data;
-    }
-
-    has(keyword: string, countryId: string, languageId: string): boolean {
-        return this.get(keyword, countryId, languageId) !== undefined;
-    }
-
-    /**
-     * Filters a list of keywords, returning only those NOT in the cache for this specific context.
-     */
-    getMissing(keywords: string[], countryId: string, languageId: string): string[] {
-        return keywords.filter(k => !this.has(k, countryId, languageId));
-    }
-}
-
-// Export singleton instances
-export const HistoryCache = new KeywordDataCache<KeywordHistoricalMetrics>();
-export const ForecastCache = new KeywordDataCache<KeywordForecast>();
-
-// Helper to bulk cache History results (used by Enrichment and Analysis)
-export const cacheHistoryBatch = (results: UnifiedKeywordResult[], countryId: string, languageId: string) => {
-    results.forEach(res => {
-        if (res.keyword_metrics) {
-            HistoryCache.set(res.text, countryId, languageId, res.keyword_metrics);
-        }
-    });
 };

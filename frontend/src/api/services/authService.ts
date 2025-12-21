@@ -14,9 +14,9 @@ export const authService = {
         return apiClient.post<TokenResponse>('/api/v1/login/google', { code });
     },
 
-    // ▼▼▼ NEW: Link Google Ads ▼▼▼
+    // ▼▼▼ FIX: Updated Endpoint to match Backend ▼▼▼
     linkGoogleAds: async (code: string): Promise<MessageResponse> => {
-        return apiClient.post<MessageResponse>('/api/v1/users/me/link-google-ads', {
+        return apiClient.post<MessageResponse>('/api/v1/users/me/google-ads/link', {
             code,
             redirect_uri: 'http://localhost:8080' // Must match Google Console exactly
         });

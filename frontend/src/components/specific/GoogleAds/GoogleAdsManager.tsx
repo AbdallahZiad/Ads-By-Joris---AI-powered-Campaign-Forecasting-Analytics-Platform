@@ -10,7 +10,8 @@ import { useProject } from '../../../contexts/ProjectContext';
 import { useProjectSync } from '../CategoryManagement/hooks/useProjectSync';
 import ProjectSelector from '../CategoryManagement/components/ProjectSelector';
 import { googleAdsService } from '../../../api/services/googleAdsService';
-import { Project } from '../../../types';
+import { Project, LabelingReport } from '../../../types';
+import { useTaskPoller } from '../../../hooks/useTaskPoller'; // Poller Import
 
 // Components
 import CustomerLinker from './components/CustomerLinker';
@@ -22,6 +23,7 @@ const GoogleAdsManager: React.FC = () => {
     const { user } = useAuth();
     const { currentProjectId, setCurrentProjectId } = useProject();
 
+    // State to coordinate the race condition for manual linking
     const [isLinkingCustomer, setIsLinkingCustomer] = useState(false);
 
     const {
@@ -34,6 +36,19 @@ const GoogleAdsManager: React.FC = () => {
     } = useProjectSync(currentProjectId);
 
     const isLinked = user?.is_google_ads_linked;
+
+    // --- TASK POLLER: Labeling ---
+    const labelingPoller = useTaskPoller<LabelingReport>({
+        onSuccess: async (data) => {
+            // Refresh project data to show new labels
+            await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+            alert(`Analysis & Labeling Complete!\n\nAdded Labels to:\n• ${data.categories.count} Categories\n• ${data.groups.count} Groups\n• ${data.keywords.count} Keywords\n\nSynced to Google Ads: ${data.synced_to_google ? "Yes ✅" : "No ❌"}`);
+        },
+        onError: (err) => {
+            console.error("Labeling task failed:", err);
+            alert(`Labeling failed: ${err}`);
+        }
+    });
 
     // --- MUTATION: Auto-Linking ---
     const autoLinkMutation = useMutation({
@@ -50,15 +65,16 @@ const GoogleAdsManager: React.FC = () => {
         }
     });
 
-    // --- MUTATION: Apply Labels ---
+    // --- MUTATION: Apply Labels (Initiate Async Task) ---
     const applyLabelsMutation = useMutation({
         mutationFn: (projectId: string) => googleAdsService.applyLabels(projectId),
-        onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+        onSuccess: (data) => {
+            // Start Polling with the returned task_id
+            labelingPoller.startPolling(data.task_id);
         },
         onError: (err) => {
             console.error(err);
-            alert("Labeling failed. Please check network connection.");
+            alert("Failed to start labeling task. Please check network connection.");
         }
     });
 
@@ -98,8 +114,7 @@ const GoogleAdsManager: React.FC = () => {
         }
     });
 
-    // ▼▼▼ FIX: Unified Lock to prevent Race Conditions ▼▼▼
-    const isAnyActionPending = autoLinkMutation.isPending || applyLabelsMutation.isPending || removeLabelsMutation.isPending;
+    const isAnyActionPending = autoLinkMutation.isPending || applyLabelsMutation.isPending || removeLabelsMutation.isPending || labelingPoller.isLoading;
 
     const linkGoogleAds = useGoogleLogin({
         flow: 'auth-code',
@@ -203,14 +218,13 @@ const GoogleAdsManager: React.FC = () => {
                                 {/* 1. Auto-Link */}
                                 <button
                                     onClick={handleAutoLink}
-                                    // ▼▼▼ FIX: Blocked if ANY action is running ▼▼▼
                                     disabled={isAnyActionPending}
                                     className={`
                                         flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border
                                         ${autoLinkMutation.isPending
                                         ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
                                         : isAnyActionPending
-                                            ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed' // Disabled style
+                                            ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
                                             : 'bg-white text-gray-700 border-gray-300 hover:border-teal-500 hover:text-teal-600 hover:shadow-md hover:-translate-y-0.5'}
                                     `}
                                 >
@@ -225,23 +239,22 @@ const GoogleAdsManager: React.FC = () => {
                                 {/* 2. Analyze & Sync */}
                                 <button
                                     onClick={() => applyLabelsMutation.mutate(currentProjectId!)}
-                                    // ▼▼▼ FIX: Blocked if ANY action is running ▼▼▼
                                     disabled={isAnyActionPending}
                                     className={`
                                         flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white transition-all
-                                        ${applyLabelsMutation.isPending
+                                        ${applyLabelsMutation.isPending || labelingPoller.isLoading
                                         ? 'bg-teal-800 cursor-not-allowed opacity-80'
                                         : isAnyActionPending
-                                            ? 'bg-gray-300 cursor-not-allowed' // Disabled style
+                                            ? 'bg-gray-300 cursor-not-allowed'
                                             : 'bg-teal-600 hover:bg-teal-700 hover:-translate-y-0.5 hover:shadow-md'}
                                     `}
                                 >
-                                    {applyLabelsMutation.isPending ? (
+                                    {applyLabelsMutation.isPending || labelingPoller.isLoading ? (
                                         <HiRefresh className="animate-spin" size={18} />
                                     ) : (
                                         <HiLightningBolt size={18} />
                                     )}
-                                    <span>Analyze & Sync Labels</span>
+                                    <span>{labelingPoller.isLoading ? "Labeling..." : "Analyze & Sync Labels"}</span>
                                 </button>
 
                                 <div className="h-6 w-px bg-gray-200 mx-2" />
@@ -253,7 +266,6 @@ const GoogleAdsManager: React.FC = () => {
                                             removeLabelsMutation.mutate(currentProjectId!);
                                         }
                                     }}
-                                    // ▼▼▼ FIX: Blocked if ANY action is running ▼▼▼
                                     disabled={isAnyActionPending}
                                     className={`
                                         flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors border border-transparent

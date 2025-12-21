@@ -3,7 +3,8 @@ import {
     CustomerListResponse,
     CampaignListResponse,
     AdGroupListResponse,
-    LabelingReport
+    LabelingReport,
+    AsyncTaskInitResponse
 } from '../../types';
 
 export const googleAdsService = {
@@ -45,9 +46,9 @@ export const googleAdsService = {
         );
     },
 
-    // 8. Apply Labels (Analyze & Sync)
-    applyLabels: async (projectId: string) => {
-        return apiClient.post<LabelingReport>(
+    // 8. Apply Labels (Analyze & Sync) - ASYNC
+    applyLabels: async (projectId: string): Promise<AsyncTaskInitResponse> => {
+        return apiClient.post<AsyncTaskInitResponse>(
             `/api/v1/projects/${projectId}/apply-labels`,
             {}
         );
