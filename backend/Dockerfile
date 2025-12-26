@@ -1,43 +1,48 @@
-FROM python:3.10
+# 1. Base Image
+FROM python:3.10-slim
 
-ENV PYTHONUNBUFFERED=1
+# 2. Set Environment Variables
+# PYTHONDONTWRITEBYTECODE: Prevents Python from writing pyc files to disc
+# PYTHONUNBUFFERED: Ensures python logs are flushed immediately
+# PYTHONPATH: CRITICAL FIX. Tells Python to look for modules in the root /app folder.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
-WORKDIR /app/
+# 3. Install System Dependencies
+# libgomp1 is needed for Prophet
+# libpq-dev is needed for Postgres
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /uvx /bin/
+# 4. Set Working Directory
+WORKDIR /app
 
-# Place executables in the environment at the front of the path
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment
-ENV PATH="/app/.venv/bin:$PATH"
+# 5. Install Python Dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Compile bytecode
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#compiling-bytecode
-ENV UV_COMPILE_BYTECODE=1
+# 6. Copy Application Code & Scripts
+COPY . .
 
-# uv Cache
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#caching
-ENV UV_LINK_MODE=copy
+# 7. Permission Setup (Critical for Shell Scripts)
+COPY scripts /app/scripts
+RUN chmod +x /app/scripts/*
 
-# Install dependencies
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project
+# 8. Create a Non-Root User
+RUN adduser --disabled-password --gecos "" appuser && \
+    chown -R appuser:appuser /app
 
-ENV PYTHONPATH=/app
+# Switch to the non-root user
+USER appuser
 
-COPY ./scripts /app/scripts
+# 9. Expose Port
+EXPOSE 8000
 
-COPY ./pyproject.toml ./uv.lock ./alembic.ini /app/
-
-COPY ./app /app/app
-
-# Sync the project
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync
-
-CMD ["fastapi", "run", "--workers", "4", "app/main.py"]
+# 10. Default Command
+CMD ["/app/scripts/start.sh"]

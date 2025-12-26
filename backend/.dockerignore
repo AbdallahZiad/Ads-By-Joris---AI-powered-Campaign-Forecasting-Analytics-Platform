@@ -1,8 +1,16 @@
-# Python
 __pycache__
-app.egg-info
 *.pyc
-.mypy_cache
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
 .coverage
-htmlcov
-.venv
+.tox/
+.coverage
+.cache
+.pytest_cache
+.DS_Store
+.env

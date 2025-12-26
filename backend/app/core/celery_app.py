@@ -18,6 +18,18 @@ celery_app.conf.update(
     imports=["app.tasks"],
     # Clean up Redis keys after 1 hour (3600 seconds)
     result_expires=3600,
+
+    # --- TASK ROUTING OPTIMIZATION ---
+    # We route tasks to specialized queues to prevent CPU-heavy jobs
+    # from blocking high-volume I/O jobs.
+    task_routes={
+        # CPU Bound: Burns CPU cores (Prophet Math & DB Logic)
+        'task_forecast_keywords': {'queue': 'cpu_heavy'},
+        'task_apply_labels':      {'queue': 'cpu_heavy'},
+
+        # I/O Bound: Mostly waiting on Network/OpenAI (can handle higher concurrency)
+        'task_scan_website':      {'queue': 'io_heavy'},
+    }
 )
 
 # 3. Optional: Print config on load to verify it sees the URL (Debugging)

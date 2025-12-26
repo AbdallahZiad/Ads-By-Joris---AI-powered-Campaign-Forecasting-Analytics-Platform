@@ -1,8 +1,22 @@
 import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+# --- CRITICAL FIX: Add project root to sys.path ---
+# This allows 'from app.models import SQLModel' to work
+# We assume env.py is located at: /app/app/alembic/env.py
+# We need to add /app to sys.path
+current_path = Path(__file__).resolve()
+project_root = current_path.parent.parent.parent
+sys.path.append(str(project_root))
+# --------------------------------------------------
+
+from app.models import SQLModel  # noqa
+from app.core.config import settings # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -10,17 +24,10 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-fileConfig(config.config_file_name)
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-# target_metadata = None
-
-from app.models import SQLModel  # noqa
-from app.core.config import settings # noqa
-
 target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
