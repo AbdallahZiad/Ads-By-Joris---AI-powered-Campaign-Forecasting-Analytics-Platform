@@ -5,17 +5,18 @@ from typing import List, Dict
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.services.llm_base import BaseLLMService
-# FIX: Added LLMTokenMetrics, PhaseMetrics to imports
+from app.core.google_ads_constants import GEO_TARGET_MAP, LANGUAGE_MAP
 from app.schemas.llm_schemas import (
     ExtractedKeywordResults, CategoryNames, KeywordCategoryMapping,
     FinalKeywordHierarchy, KeywordGroups, LLMResult, Phase,
-    LLMTokenMetrics, PhaseMetrics
+    LLMTokenMetrics, PhaseMetrics, GeoLangLLMResult, GoogleAdsSettings
 )
+
 
 class AIScanLLMService(BaseLLMService):
     """
     Specialized LLM Service for the Website Scanning Pipeline.
-    Handles extraction, categorization, and grouping.
+    Handles extraction, categorization, grouping, and geo/lang detection.
     """
 
     _MAX_INPUT_TOKENS = 10000
@@ -35,6 +36,52 @@ class AIScanLLMService(BaseLLMService):
     def _clean_keywords(self, keywords: List[str]) -> List[str]:
         cleaned = {kw.strip().lower() for kw in keywords if kw.strip()}
         return [kw for kw in sorted(list(cleaned)) if kw]
+
+    # --- NEW FEATURE: Geo & Language Detection ---
+    async def detect_geo_and_language(self, text_excerpt: str) -> GoogleAdsSettings:
+        """
+        Uses LLM to identify Country/Language names, then looks up IDs in Python constants.
+        """
+        # Truncate text to save tokens (first 2000 chars is usually enough for context)
+        safe_excerpt = text_excerpt[:2000]
+
+        llm_result: GeoLangLLMResult = await self._call_api_with_retry(
+            prompt_filename="geo_lang_detect.txt",
+            input_data={"text_excerpt": safe_excerpt},
+            response_model=GeoLangLLMResult
+        )
+
+        detected_country = llm_result.country.strip()
+        detected_lang = llm_result.language.strip()
+
+        # Intelligent Python Lookup
+        # 1. Direct Match
+        geo_id = GEO_TARGET_MAP.get(detected_country)
+        lang_id = LANGUAGE_MAP.get(detected_lang)
+
+        # 2. Fallback: Case-insensitive search if direct match fails
+        if not geo_id:
+            for k, v in GEO_TARGET_MAP.items():
+                if k.lower() == detected_country.lower():
+                    geo_id = v
+                    detected_country = k # Correct the name casing
+                    break
+
+        if not lang_id:
+            for k, v in LANGUAGE_MAP.items():
+                if k.lower() == detected_lang.lower():
+                    lang_id = v
+                    detected_lang = k # Correct the name casing
+                    break
+
+        return GoogleAdsSettings(
+            geo_target_id=geo_id, # Can be None if strictly no match found
+            geo_target_name=detected_country,
+            language_id=lang_id,  # Can be None if strictly no match found
+            language_name=detected_lang
+        )
+
+    # --- Existing Pipeline Methods ---
 
     async def extract_keywords_from_text(self, text: str, max_keywords: int = 500) -> List[str]:
         chunks = self._split_text_into_chunks(text)
@@ -126,22 +173,50 @@ class AIScanLLMService(BaseLLMService):
         self._total_tokens_used = 0
         self._phase_metrics = {}
 
+        # --- Phase 1: Geo & Language Detection (Run First) ---
+        # We only need a small excerpt, so we take the first 3000 chars of the raw text.
+        ads_config = await self._track_phase_stats(
+            Phase.GEO_LANG_DETECTION,
+            self.detect_geo_and_language(text[:3000])
+        )
+
+        # --- Phase 2: Keyword Extraction ---
         master_keywords = await self._track_phase_stats(
             Phase.KEYWORD_EXTRACTION, self.extract_keywords_from_text(text, max_keywords)
         )
-        if not master_keywords: return LLMResult(data=[], metrics=self.get_token_metrics())
 
+        # Early Exit if no keywords
+        if not master_keywords:
+            return LLMResult(
+                data=[],
+                metrics=self.get_token_metrics(),
+                ads_config=ads_config
+            )
+
+        # --- Phase 3: Category Generation ---
         categories = await self._track_phase_stats(
             Phase.CATEGORY_GENERATION, self.generate_categories(master_keywords)
         )
-        if not categories: return LLMResult(data=[], metrics=self.get_token_metrics())
 
+        if not categories:
+            return LLMResult(
+                data=[],
+                metrics=self.get_token_metrics(),
+                ads_config=ads_config
+            )
+
+        # --- Phase 4: Categorization ---
         category_mapping = await self._track_phase_stats(
             Phase.KEYWORD_CATEGORIZATION, self.categorize_keywords_pass_1(master_keywords, categories)
         )
 
+        # --- Phase 5: Grouping ---
         final_hierarchy = await self._track_phase_stats(
             Phase.KEYWORD_GROUPING, self.group_keywords_by_category(category_mapping)
         )
 
-        return LLMResult(data=final_hierarchy, metrics=self.get_token_metrics())
+        return LLMResult(
+            data=final_hierarchy,
+            metrics=self.get_token_metrics(),
+            ads_config=ads_config # Include the detected config
+        )

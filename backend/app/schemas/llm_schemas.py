@@ -1,18 +1,16 @@
 from enum import Enum
+from typing import List, Dict, Optional, Any
 
 from pydantic import BaseModel, Field, RootModel
-from typing import List, Dict, Optional
 
 
 # --- Extraction Outputs ---
-
 class ExtractedKeywordResults(BaseModel):
     """The expected output from the keyword extraction pass (per chunk)."""
     keywords: List[str] = Field(..., description="A list of marketable keywords extracted from the text chunk.")
 
 
 # --- Categorization & Grouping Outputs ---
-
 class CategoryNames(BaseModel):
     """The expected output from the category generation step."""
     categories: List[str] = Field(..., description="A list of high-level category names derived from the keywords.")
@@ -20,47 +18,47 @@ class CategoryNames(BaseModel):
 
 class KeywordCategoryMapping(RootModel[Dict[str, List[str]]]):
     """
-    The first categorization pass output. The root of the JSON response is
-    a dictionary where keys are the pre-defined category names and values
-    are the list of keywords assigned to that category.
+    The first categorization pass output. Map of Category -> Keywords.
     """
     pass
 
 
 class KeywordGroup(BaseModel):
     """Represents a final group (Ad Group equivalent) within a category."""
-    group_name: str = Field(...,
-                            description="A descriptive name for the group (e.g., 'Winter Boots', 'Premium Coffee').")
-    keywords: List[str] = Field(...,
-                                description="The list of keywords belonging to this specific, tightly-themed group.")
+    group_name: str = Field(..., description="A descriptive name for the group.")
+    keywords: List[str] = Field(..., description="The list of keywords belonging to this group.")
 
 
 class KeywordGroups(BaseModel):
-    """
-    A wrapper model for the final grouping step. The LLM is instructed to
-    return a JSON object containing a list of groups under the 'groups' key.
-    """
-    groups: List[KeywordGroup] = Field(...,
-                                       description="A list of all granular, tightly-themed keyword groups for the given category.")
+    """Wrapper for the final grouping step."""
+    groups: List[KeywordGroup] = Field(..., description="A list of granular keyword groups.")
 
 
 class FinalKeywordHierarchy(BaseModel):
-    """The final, combined structured output for one category ready for the database/pipeline."""
+    """The final, combined structured output for one category."""
     category_name: str
     groups: List[KeywordGroup]
 
 
-# --- Auto-Linking Outputs (NEW) ---
-
+# --- Auto-Linking Outputs ---
 class AutoLinkMatchResult(BaseModel):
-    """
-    The output from the Auto-Link LLM Prompt.
-    Maps internal Source IDs to external Target IDs.
-    """
-    matches: Dict[str, Optional[str]] = Field(
-        ...,
-        description="Dictionary where Key is the Source ID (UUID) and Value is the Target Google ID (or null)."
-    )
+    """The output from the Auto-Link LLM Prompt."""
+    matches: Dict[str, Optional[str]] = Field(..., description="Source ID to Target ID mapping.")
+
+
+# --- NEW: Geo & Language Detection Outputs ---
+class GeoLangLLMResult(BaseModel):
+    """The raw JSON output from the LLM for Geo/Lang detection."""
+    country: str = Field(..., description="The detected country name (e.g., 'United States').")
+    language: str = Field(..., description="The detected language name (e.g., 'English').")
+
+
+class GoogleAdsSettings(BaseModel):
+    """The resolved Google Ads IDs and names after Python lookup."""
+    geo_target_id: Optional[str] = None
+    geo_target_name: str
+    language_id: Optional[str] = None
+    language_name: str
 
 
 # --- Final Pipeline Result Metrics ---
@@ -69,25 +67,26 @@ class Phase(Enum):
     CATEGORY_GENERATION = "category_generation"
     KEYWORD_CATEGORIZATION = "keyword_categorization"
     KEYWORD_GROUPING = "keyword_grouping"
-    AUTO_LINKING = "auto_linking" # New Phase
+    AUTO_LINKING = "auto_linking"
+    GEO_LANG_DETECTION = "geo_lang_detection"  # <--- NEW PHASE
+
 
 class PhaseMetrics(BaseModel):
     """Metrics for a single phase of the pipeline."""
-    time_taken_seconds: float = Field(..., description="The time taken for this phase, in seconds.")
-    tokens_used: int = Field(..., description="Total tokens (prompt + completion) used in this phase.")
-    api_calls: int = Field(..., description="The number of API calls made in this phase.")
+    time_taken_seconds: float
+    tokens_used: int
+    api_calls: int
 
 
 class LLMTokenMetrics(BaseModel):
-    """Encapsulates the total token usage and phase-specific metrics for the entire pipeline run."""
-    total_tokens: int = Field(0, description="The sum of all prompt and completion tokens used across all API calls.")
-    phase_metrics: Dict[Phase, PhaseMetrics] = Field(
-        default_factory=dict,
-        description="A dictionary containing metrics for each processing phase.",
-    )
+    """Encapsulates the total token usage and phase-specific metrics."""
+    total_tokens: int = Field(0)
+    phase_metrics: Dict[Phase, PhaseMetrics] = Field(default_factory=dict)
 
 
 class LLMResult(BaseModel):
-    """The final model returned to the service layer, containing both data and token metrics."""
+    """The final model returned to the service layer."""
     data: List[FinalKeywordHierarchy] = Field(..., description="The final structured keyword hierarchy data.")
-    metrics: LLMTokenMetrics = Field(..., description="The token usage data for the pipeline execution.")
+    # NEW: Optional config found during the scan
+    ads_config: Optional[GoogleAdsSettings] = Field(None, description="Recommended Google Ads Geo/Lang settings.")
+    metrics: LLMTokenMetrics = Field(..., description="The token usage data.")

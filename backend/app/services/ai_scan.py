@@ -5,17 +5,13 @@ from typing import List, Tuple
 
 from app.services.web_crawler import CrawlConfig, CrawlStats, WebCrawlerService
 from app.services.llm_aiscan import AIScanLLMService
-# FIX: Import schemas from the correct location
-from app.schemas.llm_schemas import LLMResult, LLMTokenMetrics, PhaseMetrics
+from app.schemas.llm_schemas import LLMResult, LLMTokenMetrics
 
 
 class AIScanService:
     """
     Orchestrates the complete AI Website Scan pipeline by chaining the
     WebCrawlerService and the AIScanLLMService.
-
-    This service provides a unified entry point to fetch raw content and immediately
-    process it through the multistep keyword hierarchy generation pipeline.
     """
 
     def __init__(self):
@@ -45,10 +41,9 @@ class AIScanService:
 
         if not full_text_content.strip():
             print("LLM pipeline skipped: No text content was successfully extracted.")
-            # Return a valid PipelineResult with zero tokens
             return LLMResult(data=[], metrics=LLMTokenMetrics(total_tokens=0, phase_metrics={}))
 
-        # Run the full, robust LLM pipeline
+        # Run the full, robust LLM pipeline (Includes Geo/Lang + Keywords)
         pipeline_result = await llm_service.run_full_extraction_categorization_pipeline(
             text=full_text_content
         )
@@ -59,7 +54,6 @@ class AIScanService:
         """Prints a clean, cohesive summary of the LLM pipeline metrics."""
         print("\n--- LLM Processing Metrics (Per Phase) ---")
 
-        # Sort phases by their time taken, for high-value display
         sorted_phases = sorted(
             metrics.phase_metrics.items(),
             key=lambda item: item[1].time_taken_seconds,
@@ -67,7 +61,6 @@ class AIScanService:
         )
 
         for phase_name, p_metrics in sorted_phases:
-            # Clean up the phase name for display
             display_name = phase_name.value.replace('_', ' ').title()
             time_str = f"{p_metrics.time_taken_seconds:.2f}s"
             tokens_str = f"{p_metrics.tokens_used:,} tokens"
@@ -83,23 +76,15 @@ class AIScanService:
     ) -> Tuple[LLMResult, CrawlStats]:
         """
         Executes the complete website scan and AI processing pipeline.
-
-        Args:
-            config: The CrawlConfig defining scope, depth, politeness, etc.
-
-        Returns:
-            A tuple containing the final PipelineResult (structured hierarchy + metrics)
-            and the CrawlStats (web scanning metadata).
         """
         start_time = time.time()
 
-        # Step 1: Crawl the website to get raw, clean text
+        # Step 1: Crawl
         raw_text_snippets, crawler_stats = await self._run_crawler(config)
 
-        # Step 2: Process text using the LLM pipeline
+        # Step 2: Process (Geo Detection + Keywords)
         pipeline_result = await self._run_llm_pipeline_step(raw_text_snippets)
 
-        # Finalize overall statistics
         total_duration = round(time.time() - start_time, 2)
 
         # --- Final Summary ---
@@ -108,13 +93,8 @@ class AIScanService:
         print(f"Total End-to-End Duration: {total_duration} seconds")
         print("=============================================")
 
-        print("\n--- Web Crawler Statistics ---")
-        print(f"  • Pages Scanned/Failed: {crawler_stats.pages_crawled} / {crawler_stats.pages_failed}")
-        print(f"  • Total Crawl Duration: {crawler_stats.crawl_duration_seconds:.2f}s")
-        print(f"  • Max Depth Reached: {crawler_stats.max_depth_reached}")
-        print(f"  • Total Links Discovered: {crawler_stats.total_links_found:,}")
-        print(f"  • Avg Page Size: {crawler_stats.average_page_size_bytes:,.0f} bytes")
-        print(f"  • Robots.txt Found: {crawler_stats.robots_txt_found}")
+        if pipeline_result.ads_config:
+            print(f"🌍 Detected Settings: {pipeline_result.ads_config.geo_target_name} ({pipeline_result.ads_config.geo_target_id}) | {pipeline_result.ads_config.language_name} ({pipeline_result.ads_config.language_id})")
 
         self._display_llm_metrics(pipeline_result.metrics)
 
@@ -132,12 +112,14 @@ async def main_test():
     )
 
     scanner = AIScanService()
-
-    # Run the full pipeline
     result_data, scan_stats = await scanner.scan_website(scan_config)
 
     print("\n--- Final Structured Data ---")
     print(json.dumps(result_data.data, indent=4, default=lambda o: o.dict()))
+
+    if result_data.ads_config:
+        print("\n--- Recommended Ads Config ---")
+        print(result_data.ads_config.model_dump_json(indent=4))
 
 
 if __name__ == '__main__':

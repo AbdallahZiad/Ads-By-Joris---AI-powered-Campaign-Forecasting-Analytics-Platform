@@ -1,0 +1,20 @@
+Analyze the provided text excerpt from a website and determine the most relevant **Country** (Geo Target) and **Language** for a Google Ads campaign.
+
+### Instructions:
+1.  **Analyze Country (Geo Target):** Look for location clues like currency symbols (e.g., £, €, $), shipping addresses, phone codes (+44, +1), or domain extensions (.co.uk, .lt, .eg). Determine the *primary* country the business operates in.
+2.  **Analyze Language (Strictly Text-Based):** IGNORE the location for this step. Look *only* at the actual words and grammar used in the provided text excerpt. What language is this specific text written in? (e.g., A site in Lithuania might be written in English).
+3.  **Decouple Them:** It is perfectly normal for the Country to be "Lithuania" but the Language to be "English". Report exactly what you see.
+4.  **Ambiguity:** If the site is global/generic English with no specific country clues, default Country to "United States".
+
+TEXT EXCERPT:
+---
+{text_excerpt}
+---
+
+Return ONLY a JSON object with keys "country" and "language".
+
+JSON SCHEMA EXAMPLE:
+{{
+    "country": "Lithuania",
+    "language": "English"
+}}

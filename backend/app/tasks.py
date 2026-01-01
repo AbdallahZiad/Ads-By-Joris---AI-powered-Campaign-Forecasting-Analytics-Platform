@@ -64,6 +64,8 @@ def task_scan_website(self, crawl_config_dict: dict):
         # We match the 'AIScanResponse' schema structure
         return {
             "structured_data": [item.model_dump(mode="json") for item in llm_result.data],
+            # UPDATED: Pass the detected ads config (if available)
+            "google_ads_config": llm_result.ads_config.model_dump(mode="json") if llm_result.ads_config else None,
             "crawl_stats": crawl_stats.model_dump(mode="json"),
             "llm_metrics": llm_result.metrics.model_dump(mode="json")
         }
