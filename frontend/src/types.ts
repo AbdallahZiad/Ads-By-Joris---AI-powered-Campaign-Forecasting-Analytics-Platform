@@ -85,7 +85,7 @@ export interface LabelingReport {
     synced_to_google: boolean;
 }
 
-// --- Async Task Types (NEW) ---
+// --- Async Task Types ---
 
 export type TaskStatus = 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE';
 
@@ -198,6 +198,7 @@ export interface AnalyzedCategory {
     groups: AnalyzedGroup[];
 }
 
+// ▼▼▼ UPDATED: AggregatedStats now supports Forecast Columns ▼▼▼
 export interface AggregatedStats {
     id: string;
     name: string;
@@ -206,7 +207,12 @@ export interface AggregatedStats {
     totalVolume: number;
     avgCpc: number;
     avgCompetition: number;
-    maxGrowth: number;
+    // New Weighted Forecast Metrics
+    forecastCurrent: number;
+    forecastYoY: number; // Weighted Average
+    forecast1M: number;  // Weighted Average
+    forecast3M: number;  // Weighted Average
+    forecast6M: number;  // Weighted Average
     labels: string[];
     originalRef: AnalyzedCategory | AnalyzedGroup;
 }
@@ -256,12 +262,10 @@ export interface LlmMetrics {
         category_generation: PhaseMetrics;
         keyword_categorization: PhaseMetrics;
         keyword_grouping: PhaseMetrics;
-        // The API returns 'geo_lang_detection' sometimes, we can map broadly:
         [key: string]: PhaseMetrics;
     }
 }
 
-// ▼▼▼ NEW: Added Config from Scanner ▼▼▼
 export interface ScannerAdsConfig {
     geo_target_id: string;
     geo_target_name: string;
@@ -271,7 +275,7 @@ export interface ScannerAdsConfig {
 
 export interface ScannerResponse {
     structured_data: ScannedCategoryRaw[];
-    google_ads_config?: ScannerAdsConfig; // Added here
+    google_ads_config?: ScannerAdsConfig;
     crawl_stats: CrawlStats;
     llm_metrics: LlmMetrics;
 }
@@ -316,4 +320,13 @@ export interface PasswordReset {
 
 export interface MessageResponse {
     message: string;
+}
+
+// ▼▼▼ NEW: Sorting Types ▼▼▼
+export type SortField = 'NAME' | 'VOLUME' | 'GROWTH' | 'COMPETITION';
+export type SortOrder = 'ASC' | 'DESC';
+
+export interface SortConfig {
+    field: SortField;
+    order: SortOrder;
 }

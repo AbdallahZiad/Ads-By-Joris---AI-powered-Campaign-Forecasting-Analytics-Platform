@@ -1,21 +1,20 @@
 import React, { useMemo } from 'react';
 import Collapsible from '../../../common/Collapsible/Collapsible';
 import AnalyzedGroup from '../AnalyzedGroup/AnalyzedGroup';
-import { AnalyzedCategory as AnalyzedCategoryType, AnalyzedKeyword } from '../../../../types';
+import { AnalyzedCategory as AnalyzedCategoryType, AnalyzedKeyword, SortConfig } from '../../../../types';
 import styles from './AnalyzedCategory.module.css';
 
 interface Props {
     category: AnalyzedCategoryType;
     chartSelection: Set<string>;
     onChartSelectionChange: (keywords: string[], isSelected: boolean) => void;
+    sortConfig: SortConfig; // ▼▼▼ NEW PROP
 }
 
-const AnalyzedCategory: React.FC<Props> = ({ category, chartSelection, onChartSelectionChange }) => {
+const AnalyzedCategory: React.FC<Props> = ({ category, chartSelection, onChartSelectionChange, sortConfig }) => {
 
-    // ▼▼▼ ROBUSTNESS: Filter for valid keywords at category level ▼▼▼
     const isSelectable = (k: AnalyzedKeyword) => !(k.history === null && k.forecast === null);
 
-    // Get ALL selectable keywords across ALL groups in this category
     const allSelectableCategoryKeywords = useMemo(() =>
             category.groups.flatMap(g => g.keywords.filter(isSelectable).map(k => k.text)),
         [category]
@@ -44,6 +43,7 @@ const AnalyzedCategory: React.FC<Props> = ({ category, chartSelection, onChartSe
                     group={group}
                     chartSelection={chartSelection}
                     onChartSelectionChange={onChartSelectionChange}
+                    sortConfig={sortConfig} // ▼▼▼ Pass Down
                 />
             ))}
         </Collapsible>

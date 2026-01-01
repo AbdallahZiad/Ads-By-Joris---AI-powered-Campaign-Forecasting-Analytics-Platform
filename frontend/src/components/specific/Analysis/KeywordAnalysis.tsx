@@ -1,30 +1,43 @@
 import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiArrowLeft, HiChartBar, HiCollection, HiLightningBolt } from 'react-icons/hi';
+import { HiArrowLeft, HiChartBar, HiCollection, HiLightningBolt } from 'react-icons/hi'; // ▼▼▼ FIX: Removed unused icons
 import { useProject } from '../../../contexts/ProjectContext';
 import { useKeywordAnalysis } from '../../../hooks/useKeywordAnalysis';
 import AnalysisChart from './AnalysisChart/AnalysisChart';
 import AnalysisSummaryRow from './AnalysisSummaryRow/AnalysisSummaryRow';
 import AnalysisBreadcrumbs from './AnalysisBreadcrumbs';
 import AnalyzedGroup from './AnalyzedGroup/AnalyzedGroup';
+// ▼▼▼ FIX: Removed unused AnalyzedCategory import
 import LoadingOverlay from '../../common/LoadingOverlay/LoadingOverlay';
+import SearchableSelect from '../../common/SearchableSelect/SearchableSelect';
 import { GEO_TARGET_REVERSE_MAP, LANGUAGE_REVERSE_MAP } from '../../../constants';
 import PageLayout from '../../common/PageLayout/PageLayout';
 import { useAnalysisAggregator } from '../../../hooks/useAnalysisAggregator';
-import { ViewLevel } from '../../../types';
+import { ViewLevel, SortConfig, SortField, SortOrder, SelectOption } from '../../../types';
 import { formatNumber, formatMultiplier } from '../../../utils/format';
+
+// ▼▼▼ DEFINITION: Sort Options ▼▼▼
+const SORT_OPTIONS: SelectOption[] = [
+    { id: 'VOLUME_DESC', name: 'Highest Volume' },
+    { id: 'VOLUME_ASC', name: 'Lowest Volume' },
+    { id: 'GROWTH_DESC', name: 'Highest Growth' },
+    { id: 'GROWTH_ASC', name: 'Lowest Growth' },
+    { id: 'COMPETITION_DESC', name: 'Highest Competition' },
+    { id: 'COMPETITION_ASC', name: 'Lowest Competition' },
+    { id: 'NAME_ASC', name: 'Name (A-Z)' },
+];
 
 const KeywordAnalysis: React.FC = () => {
     const navigate = useNavigate();
     const { analysisInputs } = useProject();
-
-    // ▼▼▼ ANCHOR: The specific point we snap to. ▼▼▼
     const listTopRef = useRef<HTMLDivElement>(null);
 
-    // --- 1. View State ---
+    // --- 1. View & Sort State ---
     const [viewLevel, setViewLevel] = useState<ViewLevel>('ROOT');
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+
+    const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'VOLUME', order: 'DESC' });
 
     // --- 2. Data Fetching ---
     React.useEffect(() => {
@@ -39,7 +52,31 @@ const KeywordAnalysis: React.FC = () => {
     // --- 3. Aggregation Logic ---
     const { rootStats, getGroupStatsForCategory, projectTotals } = useAnalysisAggregator(analyzedCategories);
 
-    // --- 4. Chart Selection Logic ---
+    // --- 4. Sorting Helper ---
+    const getSortedStats = (stats: any[]) => {
+        return [...stats].sort((a, b) => {
+            const m = sortConfig.order === 'ASC' ? 1 : -1;
+            let valA = 0;
+            let valB = 0;
+
+            if (sortConfig.field === 'NAME') {
+                return a.name.localeCompare(b.name) * m;
+            } else if (sortConfig.field === 'VOLUME') {
+                valA = a.totalVolume;
+                valB = b.totalVolume;
+            } else if (sortConfig.field === 'COMPETITION') {
+                valA = a.avgCompetition;
+                valB = b.avgCompetition;
+            } else if (sortConfig.field === 'GROWTH') {
+                valA = a.forecastYoY;
+                valB = b.forecastYoY;
+            }
+
+            return (valA - valB) * m;
+        });
+    };
+
+    // --- 5. Chart Selection Logic ---
     const [chartSelection, setChartSelection] = useState<Set<string>>(new Set());
 
     const selectedKeywordsForChart = useMemo(() => {
@@ -67,23 +104,18 @@ const KeywordAnalysis: React.FC = () => {
         });
     };
 
-    // --- 5. ENTERPRISE SCROLLING LOGIC ---
+    // --- 6. Effects ---
     useLayoutEffect(() => {
         if (listTopRef.current) {
-
-            // Checks if the user is already deeper in the page (don't snap if looking at footer)
-            // But enforces the "Ceiling" logic if the content is pushed down.
-
             listTopRef.current.scrollIntoView({
-                behavior: 'auto', // INSTANT SNAP. Compensates for Chart expansion immediately.
-                block: 'start',   // Aligns top of element to top of viewport
+                behavior: 'auto',
+                block: 'start',
                 inline: 'nearest'
             });
         }
-        // Snap when view changes OR when chart expands (adding keywords)
-    }, [viewLevel, selectedCategoryId, selectedGroupId, chartSelection.size]);
+    }, [viewLevel, selectedCategoryId, selectedGroupId, chartSelection.size, sortConfig]);
 
-    // --- 6. Handlers ---
+    // --- 7. Handlers ---
     const handleCategoryClick = (id: string) => {
         setSelectedCategoryId(id);
         setViewLevel('CATEGORY');
@@ -105,7 +137,13 @@ const KeywordAnalysis: React.FC = () => {
         setSelectedGroupId(null);
     };
 
-    // --- 7. Derived Data ---
+    const handleSortChange = (option: SelectOption | null) => {
+        if (!option) return;
+        const [field, order] = option.id.split('_');
+        setSortConfig({ field: field as SortField, order: order as SortOrder });
+    };
+
+    // --- 8. Derived Data for Views ---
     const currentCategory = useMemo(() =>
             analyzedCategories.find(c => c.id === selectedCategoryId),
         [analyzedCategories, selectedCategoryId]);
@@ -114,12 +152,17 @@ const KeywordAnalysis: React.FC = () => {
             currentCategory?.groups.find(g => g.id === selectedGroupId),
         [currentCategory, selectedGroupId]);
 
-    const categoryGroupStats = useMemo(() =>
-            selectedCategoryId ? getGroupStatsForCategory(selectedCategoryId) : [],
-        [selectedCategoryId, analyzedCategories]);
+    const sortedRootStats = useMemo(() => getSortedStats(rootStats), [rootStats, sortConfig]);
+    const sortedCategoryGroupStats = useMemo(() =>
+            selectedCategoryId ? getSortedStats(getGroupStatsForCategory(selectedCategoryId)) : [],
+        [selectedCategoryId, analyzedCategories, sortConfig]);
 
     const countryName = countryId ? (GEO_TARGET_REVERSE_MAP[countryId] || 'Unknown Region') : 'N/A';
     const languageName = languageId ? (LANGUAGE_REVERSE_MAP[languageId] || 'Unknown Language') : 'N/A';
+
+    const currentSortOption = useMemo(() =>
+            SORT_OPTIONS.find(opt => opt.id === `${sortConfig.field}_${sortConfig.order}`) || SORT_OPTIONS[0],
+        [sortConfig]);
 
     return (
         <PageLayout>
@@ -142,7 +185,7 @@ const KeywordAnalysis: React.FC = () => {
 
                     <button
                         onClick={() => navigate('/planner')}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all hover:pl-3"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-all shadow-sm"
                     >
                         <HiArrowLeft /> Back to Selection
                     </button>
@@ -150,8 +193,7 @@ const KeywordAnalysis: React.FC = () => {
 
                 {/* Elegant Data Bar */}
                 <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-8">
-
-                    {/* Stat 1: Total Volume (Teal - Primary Brand Color) */}
+                    {/* Stat 1 */}
                     <div className="flex items-center gap-4 px-4 flex-1 border-r border-gray-100">
                         <div className="p-3 bg-teal-50 text-teal-600 rounded-lg">
                             <HiChartBar size={20} />
@@ -163,8 +205,7 @@ const KeywordAnalysis: React.FC = () => {
                             </p>
                         </div>
                     </div>
-
-                    {/* Stat 2: Keywords (Gray - Neutral Metadata) */}
+                    {/* Stat 2 */}
                     <div className="flex items-center gap-4 px-4 flex-1 border-r border-gray-100">
                         <div className="p-3 bg-gray-50 text-gray-500 rounded-lg">
                             <HiCollection size={20} />
@@ -176,8 +217,7 @@ const KeywordAnalysis: React.FC = () => {
                             </p>
                         </div>
                     </div>
-
-                    {/* Stat 3: Growth Potential (Indigo - Matches Forecast/AI UI) */}
+                    {/* Stat 3 */}
                     <div className="flex items-center gap-4 px-4 flex-1">
                         <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
                             <HiLightningBolt size={20} />
@@ -195,39 +235,43 @@ const KeywordAnalysis: React.FC = () => {
                 <div className="relative min-h-[500px]">
                     <LoadingOverlay history={isLoading.history} forecast={isLoading.forecast} />
 
-                    {/* Chart - Always Visible */}
+                    {/* Chart */}
                     <div className="mb-8">
                         <AnalysisChart selectedKeywords={selectedKeywordsForChart} />
                     </div>
 
-                    {/* ▼▼▼ SCROLL ANCHOR ▼▼▼ */}
-                    {/* scroll-mt-32 creates a significant buffer (8rem/128px) so the breadcrumbs aren't glued to the top edge */}
                     <div ref={listTopRef} className="scroll-mt-32" />
 
-                    {/* Navigation Breadcrumbs */}
-                    <AnalysisBreadcrumbs
-                        viewLevel={viewLevel}
-                        categoryName={currentCategory?.name}
-                        groupName={currentGroup?.name}
-                        onReset={handleReset}
-                        onGoToCategory={handleGoToCategory}
-                    />
+                    {/* Controls Row: Breadcrumbs + Sort */}
+                    <div className="flex justify-between items-center mb-4">
+                        <AnalysisBreadcrumbs
+                            viewLevel={viewLevel}
+                            categoryName={currentCategory?.name}
+                            groupName={currentGroup?.name}
+                            onReset={handleReset}
+                            onGoToCategory={handleGoToCategory}
+                        />
+
+                        {/* Sort Dropdown */}
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sort by</span>
+                            <div className="w-56">
+                                <SearchableSelect
+                                    value={currentSortOption}
+                                    onChange={handleSortChange}
+                                    options={SORT_OPTIONS}
+                                    placeholder="Sort by..."
+                                    instanceId="sort-dropdown"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
                     {/* --- VIEW LEVEL 1: ROOT (Categories List) --- */}
                     {viewLevel === 'ROOT' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            {/* Header Row */}
-                            <div className="grid grid-cols-[2rem_2fr_1fr_1fr_1fr_1fr_3rem] gap-4 px-6 py-3 bg-gray-50 border-y border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 rounded-md">
-                                <div></div>
-                                <div>Category Name</div>
-                                <div className="text-right">Total Vol</div>
-                                <div className="text-right">Avg CPC</div>
-                                <div className="text-right">Avg Comp</div>
-                                <div className="text-right">Top Trend</div>
-                                <div></div>
-                            </div>
 
-                            {rootStats.map(stat => (
+                            {sortedRootStats.map(stat => (
                                 <AnalysisSummaryRow
                                     key={stat.id}
                                     stats={stat}
@@ -235,7 +279,7 @@ const KeywordAnalysis: React.FC = () => {
                                 />
                             ))}
 
-                            {rootStats.length === 0 && !isLoading.history && (
+                            {sortedRootStats.length === 0 && !isLoading.history && (
                                 <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
                                     No categories found in analysis.
                                 </div>
@@ -246,17 +290,8 @@ const KeywordAnalysis: React.FC = () => {
                     {/* --- VIEW LEVEL 2: CATEGORY (Groups List) --- */}
                     {viewLevel === 'CATEGORY' && currentCategory && (
                         <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div className="grid grid-cols-[2rem_2fr_1fr_1fr_1fr_1fr_3rem] gap-4 px-6 py-3 bg-gray-50 border-y border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 rounded-md">
-                                <div></div>
-                                <div>Group Name</div>
-                                <div className="text-right">Total Vol</div>
-                                <div className="text-right">Avg CPC</div>
-                                <div className="text-right">Avg Comp</div>
-                                <div className="text-right">Top Trend</div>
-                                <div></div>
-                            </div>
 
-                            {categoryGroupStats.map(stat => (
+                            {sortedCategoryGroupStats.map(stat => (
                                 <AnalysisSummaryRow
                                     key={stat.id}
                                     stats={stat}
@@ -273,6 +308,7 @@ const KeywordAnalysis: React.FC = () => {
                                 group={currentGroup}
                                 chartSelection={chartSelection}
                                 onChartSelectionChange={handleChartSelectionChange}
+                                sortConfig={sortConfig}
                             />
                         </div>
                     )}

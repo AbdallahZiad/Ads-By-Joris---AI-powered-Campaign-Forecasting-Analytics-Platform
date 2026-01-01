@@ -15,7 +15,7 @@
     background-color: #f9fafb; /* gray-50 */
 }
 
-/* ▼▼▼ NEW: Disabled Row State ▼▼▼ */
+/* ▼▼▼ Disabled Row State ▼▼▼ */
 .rowContainer.disabled {
     opacity: 0.5;
     pointer-events: none; /* Prevent interactions with the whole row */
@@ -35,7 +35,7 @@
     transition: all 0.15s ease-in-out;
 }
 
-/* ▼▼▼ NEW: Disabled Checkbox State ▼▼▼ */
+/* ▼▼▼ Disabled Checkbox State ▼▼▼ */
 .checkbox:disabled {
     border-color: #e5e7eb; /* gray-200 */
     background-color: #f3f4f6; /* gray-100 */
@@ -83,6 +83,7 @@
 
 .positive { color: #10b981; }
 .negative { color: #ef4444; }
+.neutral  { color: #374151; } /* ▼▼▼ NEW: Explicit Gray for 0% ▼▼▼ */
 .placeholder { color: #d1d5db; }
 
 .skeleton {

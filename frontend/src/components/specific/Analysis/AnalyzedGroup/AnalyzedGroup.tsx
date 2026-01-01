@@ -2,36 +2,66 @@ import React, { useMemo } from 'react';
 import { HiSparkles } from 'react-icons/hi';
 import Collapsible from '../../../common/Collapsible/Collapsible';
 import AnalyzedKeywordRow from '../AnalyzedKeywordRow/AnalyzedKeywordRow';
-import { AnalyzedGroup as AnalyzedGroupType, AnalyzedKeyword } from '../../../../types';
+import { AnalyzedGroup as AnalyzedGroupType, AnalyzedKeyword, SortConfig } from '../../../../types';
 import styles from './AnalyzedGroup.module.css';
 
 interface Props {
     group: AnalyzedGroupType;
     chartSelection: Set<string>;
     onChartSelectionChange: (keywords: string[], isSelected: boolean) => void;
+    sortConfig: SortConfig; // ▼▼▼ NEW PROP
 }
 
-const AnalyzedGroup: React.FC<Props> = ({ group, chartSelection, onChartSelectionChange }) => {
+const AnalyzedGroup: React.FC<Props> = ({ group, chartSelection, onChartSelectionChange, sortConfig }) => {
 
-    // ▼▼▼ ROBUSTNESS: Only selectable if at least one data source exists ▼▼▼
     const isSelectable = (k: AnalyzedKeyword) => !(k.history === null && k.forecast === null);
 
-    // Get only the keywords that actually have data
+    // 1. Get Selectable Keywords (for Checkbox logic)
     const selectableKeywords = useMemo(() =>
             group.keywords.filter(isSelectable).map(k => k.text),
         [group]
     );
 
+    // 2. Sort Keywords for Display
+    const sortedKeywords = useMemo(() => {
+        const sorted = [...group.keywords];
+        const { field, order } = sortConfig;
+        const m = order === 'ASC' ? 1 : -1;
+
+        sorted.sort((a, b) => {
+            let valA: number | string = 0;
+            let valB: number | string = 0;
+
+            if (field === 'NAME') {
+                return a.text.localeCompare(b.text) * m;
+            } else if (field === 'VOLUME') {
+                valA = a.history?.avg_monthly_searches || 0;
+                valB = b.history?.avg_monthly_searches || 0;
+            } else if (field === 'COMPETITION') {
+                valA = a.history?.competition_index || 0;
+                valB = b.history?.competition_index || 0;
+            } else if (field === 'GROWTH') {
+                // Use YoY growth for sorting
+                valA = a.forecast?.annual_growth_rate || 0;
+                valB = b.forecast?.annual_growth_rate || 0;
+            }
+
+            if (valA < valB) return -1 * m;
+            if (valA > valB) return 1 * m;
+            return 0;
+        });
+
+        return sorted;
+    }, [group.keywords, sortConfig]);
+
+
     const handleGroupChartToggle = (isSelected: boolean) => {
-        // Only toggle keywords that have data
         onChartSelectionChange(selectableKeywords, isSelected);
     }
 
-    // Group is fully selected if it HAS selectable keywords AND they are ALL selected.
     const isFullySelected = selectableKeywords.length > 0 &&
         selectableKeywords.every(k => chartSelection.has(k));
 
-    // Disable group checkbox if it has NO selectable keywords
     const isGroupDisabled = selectableKeywords.length === 0;
 
     return (
@@ -62,7 +92,7 @@ const AnalyzedGroup: React.FC<Props> = ({ group, chartSelection, onChartSelectio
                     </div>
                 )}
 
-                {group.keywords.map((analyzedKeyword) => (
+                {sortedKeywords.map((analyzedKeyword) => (
                     <AnalyzedKeywordRow
                         key={analyzedKeyword.text}
                         data={analyzedKeyword}
