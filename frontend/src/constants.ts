@@ -1,5 +1,4 @@
-import { Month } from './types';
-import {SelectOption} from "./components/common/SearchableSelect/SearchableSelect.tsx";
+import { Month, SelectOption } from './types'; // ▼▼▼ FIX: Imported SelectOption from correct file
 
 // Elegant color palette for charts and UI elements
 export const COLORS = [

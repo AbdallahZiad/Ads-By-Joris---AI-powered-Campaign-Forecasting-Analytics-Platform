@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiCheck, HiFolderDownload } from 'react-icons/hi'; // Added Icon
+import { HiCheck, HiFolderDownload } from 'react-icons/hi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import styles from './WebsiteScanner.module.css';
@@ -8,6 +8,7 @@ import { ScannerConfig, ScannerResponse, Category, CreateProjectTreePayload } fr
 import { useScanner } from '../../../hooks/useScanner';
 import { useProject } from '../../../contexts/ProjectContext';
 import { projectService } from '../../../api/services/projectService';
+import { cacheService } from '../../../utils/cacheService'; // ▼▼▼ NEW IMPORT
 
 import ScannerHero from './components/ScannerHero';
 import ScannerConfigForm from './components/ScannerConfigForm';
@@ -21,7 +22,6 @@ const WebsiteScanner: React.FC = () => {
     const queryClient = useQueryClient();
     const { setCurrentProjectId, currentProjectId } = useProject();
 
-    // 1. Fetch the active project to see if it's empty
     const { data: activeProject } = useQuery({
         queryKey: ['project', currentProjectId],
         queryFn: () => projectService.getProject(currentProjectId!),
@@ -29,9 +29,7 @@ const WebsiteScanner: React.FC = () => {
         staleTime: 1000 * 60
     });
 
-    // 2. Determine Replacement Target
     const isContextProjectEmpty = activeProject?.categories.length === 0;
-
     const targetReplaceId = location.state?.replaceProjectId || (isContextProjectEmpty ? currentProjectId : undefined);
     const targetReplaceTitle = location.state?.replaceProjectTitle || (isContextProjectEmpty ? activeProject?.title : undefined);
 
@@ -49,11 +47,9 @@ const WebsiteScanner: React.FC = () => {
     const [scanResult, setScanResult] = useState<ScannerResponse | null>(null);
     const [showStats, setShowStats] = useState(false);
 
-    // Mutation for saving the project
     const saveProjectMutation = useMutation({
         mutationFn: projectService.createProjectTree,
         onSuccess: async (newProject) => {
-            // 1. If we are replacing an old empty project, delete it now
             if (targetReplaceId) {
                 try {
                     await projectService.deleteProject(targetReplaceId);
@@ -62,15 +58,30 @@ const WebsiteScanner: React.FC = () => {
                 }
             }
 
+            // ▼▼▼ FIX: Pre-seed Cache with AI Config ▼▼▼
+            if (scanResult?.google_ads_config) {
+                cacheService.saveProjectSettings(
+                    newProject.id,
+                    scanResult.google_ads_config.geo_target_id,
+                    scanResult.google_ads_config.language_id
+                );
+            }
+
             await queryClient.invalidateQueries({ queryKey: ['projects-list'] });
             setCurrentProjectId(newProject.id);
-            navigate('/planner');
+            navigate('/planner'); // Clean navigation
         },
         onError: (err) => {
             console.error("Failed to save project tree", err);
             alert("Failed to save project. Please try again.");
         }
     });
+
+    // ... rest of the file ...
+    // (normalizeUrl, checkUrlValidity, handleScan, handleAccept, handleReset, etc. remain unchanged)
+
+    // IMPORTANT: Include the rest of the component body here as is.
+    // I am omitting repeated code for brevity but make sure you keep the UI logic.
 
     const normalizeUrl = (input: string): string => {
         let url = input.trim();
@@ -116,7 +127,6 @@ const WebsiteScanner: React.FC = () => {
     const handleAccept = () => {
         if (!scanResult) return;
 
-        // Use the old name if we are replacing, otherwise generate one
         let projectTitle = targetReplaceTitle;
 
         if (!projectTitle) {
@@ -186,15 +196,12 @@ const WebsiteScanner: React.FC = () => {
                             <div className={styles.resultsHeader}>
                                 <h2 className="text-xl font-bold text-gray-800">Extracted Keyword Hierarchy</h2>
                                 <div className="flex items-center gap-3">
-
-                                    {/* ▼▼▼ UPDATED: Elegant Indigo Context Badge ▼▼▼ */}
                                     {targetReplaceTitle && (
                                         <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm">
                                             <HiFolderDownload size={14} className="text-indigo-500" />
                                             <span>Populating: <span className="underline decoration-indigo-200 underline-offset-2">{targetReplaceTitle}</span></span>
                                         </div>
                                     )}
-
                                     <button
                                         className={styles.statsButton}
                                         onClick={() => setShowStats(!showStats)}

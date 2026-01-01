@@ -256,11 +256,22 @@ export interface LlmMetrics {
         category_generation: PhaseMetrics;
         keyword_categorization: PhaseMetrics;
         keyword_grouping: PhaseMetrics;
+        // The API returns 'geo_lang_detection' sometimes, we can map broadly:
+        [key: string]: PhaseMetrics;
     }
+}
+
+// ▼▼▼ NEW: Added Config from Scanner ▼▼▼
+export interface ScannerAdsConfig {
+    geo_target_id: string;
+    geo_target_name: string;
+    language_id: string;
+    language_name: string;
 }
 
 export interface ScannerResponse {
     structured_data: ScannedCategoryRaw[];
+    google_ads_config?: ScannerAdsConfig; // Added here
     crawl_stats: CrawlStats;
     llm_metrics: LlmMetrics;
 }

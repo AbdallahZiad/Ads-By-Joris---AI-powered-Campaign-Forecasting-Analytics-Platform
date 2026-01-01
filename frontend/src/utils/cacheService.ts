@@ -1,4 +1,5 @@
-import { KeywordHistoricalMetrics, KeywordForecast } from '../types';
+import { KeywordHistoricalMetrics, KeywordForecast, SelectOption } from '../types';
+import { COUNTRIES_OPTIONS, LANGUAGES_OPTIONS } from '../constants';
 
 interface CachedItem {
     history: KeywordHistoricalMetrics | null;
@@ -7,6 +8,7 @@ interface CachedItem {
 }
 
 const CACHE_PREFIX = 'kwa_v1';
+const PROJECT_CONFIG_PREFIX = 'pds_config_';
 
 const getCurrentMonthKey = () => {
     const now = new Date();
@@ -58,12 +60,11 @@ export const cacheService = {
         localStorage.setItem(key, JSON.stringify(data));
     },
 
-    // ▼▼▼ FIX: Partial Merge Strategy ▼▼▼
     saveBatch: (
         countryId: string,
         languageId: string,
-        historyResults: any[], // UnifiedKeywordResult[]
-        forecastResults: any[] // KeywordForecast[]
+        historyResults: any[],
+        forecastResults: any[]
     ) => {
         const historyMap = new Map(historyResults.map(h => [h.text, h.keyword_metrics]));
         const forecastMap = new Map(forecastResults.map(f => [f.keyword, f]));
@@ -71,13 +72,7 @@ export const cacheService = {
         const allKeywords = new Set([...historyMap.keys(), ...forecastMap.keys()]);
 
         allKeywords.forEach(kw => {
-            // 1. Get existing to prevent overwriting known data with null
             const existing = cacheService.getItem(kw, countryId, languageId);
-
-            // 2. Resolve final values (New > Existing > Null)
-            // If historyMap has it (even if null?), use it. If not, fallback to existing.
-            // Note: We assume if the key is present in the map, it's an update.
-
             const newHistory = historyMap.has(kw) ? historyMap.get(kw) : existing?.history;
             const newForecast = forecastMap.has(kw) ? forecastMap.get(kw) : existing?.forecast;
 
@@ -97,5 +92,26 @@ export const cacheService = {
                 localStorage.removeItem(key);
             }
         });
+    },
+
+    // ▼▼▼ NEW: Project Settings Cache Helpers ▼▼▼
+    saveProjectSettings: (projectId: string, countryId?: string, languageId?: string) => {
+        const payload = { countryId, languageId };
+        localStorage.setItem(`${PROJECT_CONFIG_PREFIX}${projectId}`, JSON.stringify(payload));
+    },
+
+    getProjectSettings: (projectId: string): { country: SelectOption | null, language: SelectOption | null } | null => {
+        try {
+            const raw = localStorage.getItem(`${PROJECT_CONFIG_PREFIX}${projectId}`);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+
+            const country = parsed.countryId ? COUNTRIES_OPTIONS.find(c => c.id === parsed.countryId) || null : null;
+            const language = parsed.languageId ? LANGUAGES_OPTIONS.find(l => l.id === parsed.languageId) || null : null;
+
+            return { country, language };
+        } catch (e) {
+            return null;
+        }
     }
 };

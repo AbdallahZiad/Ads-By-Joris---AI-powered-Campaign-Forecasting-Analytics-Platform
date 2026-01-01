@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+// ... imports
+import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Category as CategoryType, Group as GroupType, SelectOption } from '../../../types';
-import { COUNTRIES_OPTIONS, LANGUAGES_OPTIONS } from '../../../constants';
+import { Category as CategoryType, Group as GroupType } from '../../../types';
 import DataSourceSettings from './DataSourceSettings';
 import styles from './CategoryManagement.module.css';
 import { useProject } from '../../../contexts/ProjectContext';
@@ -10,6 +10,7 @@ import { useProject } from '../../../contexts/ProjectContext';
 import { useProjectSync } from './hooks/useProjectSync';
 import { useCategoryEnrichment } from './hooks/useCategoryEnrichment';
 import { useCategorySelection } from './hooks/useCategorySelection';
+import { useProjectDataSource } from './hooks/useProjectDataSource';
 
 // Components
 import CategoryList from './components/CategoryList';
@@ -22,12 +23,17 @@ const CategoryManagement: React.FC = () => {
     const navigate = useNavigate();
     const { currentProjectId, setCurrentProjectId, setAnalysisInputs } = useProject();
 
-    const [country, setCountry] = useState<SelectOption | null>(
-        COUNTRIES_OPTIONS.find(c => c.id === '2840') || null
-    );
-    const [language, setLanguage] = useState<SelectOption | null>(
-        LANGUAGES_OPTIONS.find(l => l.id === '1000') || null
-    );
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // ▼▼▼ ROBUST DATA SOURCE HOOK (Simplified) ▼▼▼
+    const {
+        country,
+        setCountry,
+        language,
+        setLanguage
+    } = useProjectDataSource({
+        projectId: currentProjectId
+    });
 
     const {
         projects,
@@ -74,6 +80,10 @@ const CategoryManagement: React.FC = () => {
         setSelectedKeywordsByGroup
     });
 
+    // ... rest of event handlers ...
+    // (handleCreateProject, handleRenameProject, handleDeleteProject, handleAddCategory, etc.)
+    // These remain EXACTLY as provided in previous steps.
+
     const handleCreateProject = async (title: string) => {
         try {
             const newProj = await createProject({ title });
@@ -103,9 +113,23 @@ const CategoryManagement: React.FC = () => {
         }
     };
 
-    const handleAddCategory = () => {
+    const handleAddCategory = async () => {
         if (!currentProjectId) return;
-        createCategory({ projectId: currentProjectId, name: "New Category" });
+
+        try {
+            await createCategory({ projectId: currentProjectId, name: "New Category" });
+
+            setTimeout(() => {
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({
+                        top: scrollContainerRef.current.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }
+            }, 100);
+        } catch (e) {
+            console.error("Failed to create category");
+        }
     };
 
     const handleAddGroup = (catId: string) => {
@@ -169,8 +193,6 @@ const CategoryManagement: React.FC = () => {
             cat.groups.forEach(group => {
                 const groupKeywordSelections = selectedKeywordsByGroup.get(group.id);
 
-                // This check now works correctly because `groupKeywordSelections` contains strings,
-                // and `k.text` is a string.
                 if (groupKeywordSelections && groupKeywordSelections.size > 0) {
                     const filteredKeywords = group.keywords.filter(k => groupKeywordSelections.has(k.text));
                     if (filteredKeywords.length > 0) {
@@ -233,7 +255,7 @@ const CategoryManagement: React.FC = () => {
 
     return (
         <PageLayout className="h-full flex flex-col bg-gray-50">
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
                     <div className="flex justify-between items-start mb-8">
