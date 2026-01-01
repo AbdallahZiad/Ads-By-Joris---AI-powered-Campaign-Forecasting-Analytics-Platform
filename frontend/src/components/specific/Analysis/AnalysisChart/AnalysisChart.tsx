@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -18,8 +18,6 @@ import annotationPlugin from 'chartjs-plugin-annotation';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { format } from 'date-fns';
 import { HiArrowsExpand, HiOutlineMinusSm, HiRefresh, HiEye, HiEyeOff } from 'react-icons/hi';
-import { AnalyzedKeyword } from '../../../../types';
-import { COLORS, MONTH_MAP } from "../../../../constants";
 
 ChartJS.register(
     CategoryScale,
@@ -34,42 +32,39 @@ ChartJS.register(
     zoomPlugin
 );
 
-interface Props {
-    selectedKeywords: AnalyzedKeyword[];
+export interface ChartDataItem {
+    id: string;
+    label: string;
+    color: string;
+    historyPoints: { date: number; value: number }[];
+    forecastPoints: { date: number; value: number }[];
 }
 
-const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
+interface Props {
+    items: ChartDataItem[];
+}
+
+const AnalysisChart: React.FC<Props> = ({ items }) => {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const chartRef = useRef<any>(null);
     const [hiddenDatasets, setHiddenDatasets] = useState<Set<string>>(new Set());
 
-    const { data, options, hasData, allKeywordLabels } = useMemo(() => {
+    const { data, options, hasData } = useMemo(() => {
         let minTs = Infinity;
         let maxTs = -Infinity;
         let globalForecastStartTs = Infinity;
 
-        const uniqueKeywordLabels: string[] = [];
-        const labelToIndexMap = new Map<string, number>();
-
-        selectedKeywords.forEach(kw => {
-            if (!labelToIndexMap.has(kw.text)) {
-                labelToIndexMap.set(kw.text, uniqueKeywordLabels.length);
-                uniqueKeywordLabels.push(kw.text);
-            }
-        });
-
         // Determine forecast start line
-        selectedKeywords.forEach(kw => {
-            if (kw.forecast?.forecast_series) {
-                kw.forecast.forecast_series.forEach(pt => {
-                    const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
-                    globalForecastStartTs = Math.min(globalForecastStartTs, ts);
-                });
+        items.forEach(item => {
+            if (item.forecastPoints.length > 0) {
+                const start = item.forecastPoints[0].date;
+                globalForecastStartTs = Math.min(globalForecastStartTs, start);
             }
         });
 
-        const datasets = selectedKeywords.map((kw, index) => {
-            const color = COLORS[index % COLORS.length];
+        const datasets = items.map((item) => {
+            const color = item.color;
+
             const dataPoints: { x: number, y: number }[] = [];
             const pointMap = new Map<number, number>();
 
@@ -81,27 +76,23 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
                 }
             };
 
-            // ▼▼▼ ROBUSTNESS: Safe access with ?. because history might be null ▼▼▼
-            kw.history?.monthly_search_volumes.forEach(pt => {
-                const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
-                if (ts <= globalForecastStartTs) addPoint(ts, pt.monthly_searches);
+            item.historyPoints.forEach(pt => {
+                if (pt.date <= globalForecastStartTs) addPoint(pt.date, pt.value);
             });
 
-            kw.forecast?.forecast_series.forEach(pt => {
-                const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
-                // Prevent duplicate point if history already provided it
-                if (ts === globalForecastStartTs && pointMap.has(ts)) return;
-                addPoint(ts, pt.search_volume_forecast);
+            item.forecastPoints.forEach(pt => {
+                if (pt.date === globalForecastStartTs && pointMap.has(pt.date)) return;
+                addPoint(pt.date, pt.value);
             });
 
             Array.from(pointMap.entries())
                 .sort((a, b) => a[0] - b[0])
                 .forEach(([x, y]) => dataPoints.push({ x, y }));
 
-            const isHidden = hiddenDatasets.has(kw.text);
+            const isHidden = hiddenDatasets.has(item.id);
 
             return {
-                label: kw.text,
+                label: item.label,
                 data: dataPoints,
                 borderColor: color,
                 backgroundColor: color,
@@ -119,7 +110,6 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
             };
         });
 
-        // Filter out datasets that ended up with 0 points (e.g. null history AND null forecast)
         const validDatasets = datasets.filter(ds => ds.data.length > 0);
 
         const chartOptions: ChartOptions<'line'> = {
@@ -130,7 +120,7 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
                 axis: 'xy',
                 intersect: true,
             },
-            animation: { duration: 800 },
+            animation: { duration: 0 },
             layout: {
                 padding: { top: 30, right: 20, left: 10, bottom: 20 }
             },
@@ -221,13 +211,12 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
         };
 
         return {
-            data: { datasets: validDatasets }, // Use filtered datasets
+            data: { datasets: validDatasets },
             options: chartOptions,
-            hasData: validDatasets.length > 0,
-            allKeywordLabels: uniqueKeywordLabels,
+            hasData: validDatasets.length > 0
         };
 
-    }, [selectedKeywords, hiddenDatasets]);
+    }, [items, hiddenDatasets]);
 
     const handleResetZoom = () => {
         if (chartRef.current) {
@@ -251,15 +240,16 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
         if (showAll) {
             setHiddenDatasets(new Set());
         } else {
-            setHiddenDatasets(new Set(allKeywordLabels));
+            const allIds = items.map(i => i.id);
+            setHiddenDatasets(new Set(allIds));
         }
-    }, [allKeywordLabels]);
+    }, [items]);
 
 
     if (!hasData) {
         return (
             <div className="h-96 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg border border-gray-200 font-medium">
-                Select keywords below to view analysis
+                Select items below to view analysis
             </div>
         );
     }
@@ -314,7 +304,8 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
             <div className="mt-4 pt-4 border-t border-gray-100 max-h-48 overflow-y-auto flex-shrink-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2">
                     {data.datasets.map((dataset) => {
-                        const isHidden = hiddenDatasets.has(dataset.label || '');
+                        const item = items.find(i => i.label === dataset.label);
+                        const isHidden = item ? hiddenDatasets.has(item.id) : false;
                         const color = dataset.backgroundColor as string;
 
                         return (
@@ -323,7 +314,7 @@ const AnalysisChart: React.FC<Props> = ({ selectedKeywords }) => {
                                 className={`flex items-center gap-2 cursor-pointer text-sm py-1 px-2 rounded-md transition-colors ${
                                     isHidden ? 'text-gray-400 hover:bg-gray-50' : 'text-gray-700 hover:bg-gray-50'
                                 }`}
-                                onClick={() => toggleDatasetVisibility(dataset.label || '')}
+                                onClick={() => item && toggleDatasetVisibility(item.id)}
                                 title={dataset.label}
                             >
                                 <div

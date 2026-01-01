@@ -1,22 +1,20 @@
-import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useState, useRef, useLayoutEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiArrowLeft, HiChartBar, HiCollection, HiLightningBolt } from 'react-icons/hi'; // ▼▼▼ FIX: Removed unused icons
+import { HiArrowLeft, HiChartBar, HiCollection, HiLightningBolt, HiX } from 'react-icons/hi';
 import { useProject } from '../../../contexts/ProjectContext';
 import { useKeywordAnalysis } from '../../../hooks/useKeywordAnalysis';
-import AnalysisChart from './AnalysisChart/AnalysisChart';
+import AnalysisChart, { ChartDataItem } from './AnalysisChart/AnalysisChart';
 import AnalysisSummaryRow from './AnalysisSummaryRow/AnalysisSummaryRow';
 import AnalysisBreadcrumbs from './AnalysisBreadcrumbs';
 import AnalyzedGroup from './AnalyzedGroup/AnalyzedGroup';
-// ▼▼▼ FIX: Removed unused AnalyzedCategory import
 import LoadingOverlay from '../../common/LoadingOverlay/LoadingOverlay';
 import SearchableSelect from '../../common/SearchableSelect/SearchableSelect';
-import { GEO_TARGET_REVERSE_MAP, LANGUAGE_REVERSE_MAP } from '../../../constants';
+import { GEO_TARGET_REVERSE_MAP, LANGUAGE_REVERSE_MAP, MONTH_MAP, COLORS } from '../../../constants';
 import PageLayout from '../../common/PageLayout/PageLayout';
 import { useAnalysisAggregator } from '../../../hooks/useAnalysisAggregator';
-import { ViewLevel, SortConfig, SortField, SortOrder, SelectOption } from '../../../types';
+import { ViewLevel, SortConfig, SortField, SortOrder, SelectOption, ChartMode } from '../../../types';
 import { formatNumber, formatMultiplier } from '../../../utils/format';
 
-// ▼▼▼ DEFINITION: Sort Options ▼▼▼
 const SORT_OPTIONS: SelectOption[] = [
     { id: 'VOLUME_DESC', name: 'Highest Volume' },
     { id: 'VOLUME_ASC', name: 'Lowest Volume' },
@@ -32,14 +30,30 @@ const KeywordAnalysis: React.FC = () => {
     const { analysisInputs } = useProject();
     const listTopRef = useRef<HTMLDivElement>(null);
 
-    // --- 1. View & Sort State ---
+    // --- View State ---
     const [viewLevel, setViewLevel] = useState<ViewLevel>('ROOT');
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-
     const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'VOLUME', order: 'DESC' });
 
-    // --- 2. Data Fetching ---
+    // --- Chart Mode State ---
+    const [chartMode, setChartMode] = useState<ChartMode>(null);
+    const [selectedChartIds, setSelectedChartIds] = useState<Set<string>>(new Set());
+
+    // ▼▼▼ PERSISTENT COLOR ASSIGNMENT ▼▼▼
+    const colorAssignments = useRef(new Map<string, string>());
+    const nextColorIndex = useRef(0);
+
+    const getPersistentColor = (id: string) => {
+        if (!colorAssignments.current.has(id)) {
+            const color = COLORS[nextColorIndex.current % COLORS.length];
+            colorAssignments.current.set(id, color);
+            nextColorIndex.current++;
+        }
+        return colorAssignments.current.get(id)!;
+    };
+
+    // --- Data Fetching ---
     React.useEffect(() => {
         if (!analysisInputs) navigate('/planner');
     }, [analysisInputs, navigate]);
@@ -49,265 +63,281 @@ const KeywordAnalysis: React.FC = () => {
     const { selection, countryId, languageId } = analysisInputs;
     const { analyzedCategories, isLoading } = useKeywordAnalysis(selection, countryId, languageId);
 
-    // --- 3. Aggregation Logic ---
     const { rootStats, getGroupStatsForCategory, projectTotals } = useAnalysisAggregator(analyzedCategories);
 
-    // --- 4. Sorting Helper ---
+    // --- Smart Sorting ---
     const getSortedStats = (stats: any[]) => {
         return [...stats].sort((a, b) => {
             const m = sortConfig.order === 'ASC' ? 1 : -1;
-            let valA = 0;
-            let valB = 0;
-
-            if (sortConfig.field === 'NAME') {
-                return a.name.localeCompare(b.name) * m;
-            } else if (sortConfig.field === 'VOLUME') {
-                valA = a.totalVolume;
-                valB = b.totalVolume;
-            } else if (sortConfig.field === 'COMPETITION') {
-                valA = a.avgCompetition;
-                valB = b.avgCompetition;
-            } else if (sortConfig.field === 'GROWTH') {
-                valA = a.forecastYoY;
-                valB = b.forecastYoY;
-            }
-
+            let valA = 0; let valB = 0;
+            if (sortConfig.field === 'NAME') return a.name.localeCompare(b.name) * m;
+            else if (sortConfig.field === 'VOLUME') { valA = a.totalVolume; valB = b.totalVolume; }
+            else if (sortConfig.field === 'COMPETITION') { valA = a.avgCompetition; valB = b.avgCompetition; }
+            else if (sortConfig.field === 'GROWTH') { valA = a.forecastYoY; valB = b.forecastYoY; }
             return (valA - valB) * m;
         });
     };
 
-    // --- 5. Chart Selection Logic ---
-    const [chartSelection, setChartSelection] = useState<Set<string>>(new Set());
+    // --- Chart Data Preparation ---
+    const chartDataItems = useMemo<ChartDataItem[]>(() => {
+        const items: ChartDataItem[] = [];
 
-    const selectedKeywordsForChart = useMemo(() => {
-        const selected: any[] = [];
-        analyzedCategories.forEach(cat => {
-            cat.groups.forEach(grp => {
-                grp.keywords.forEach(kw => {
-                    if (chartSelection.has(kw.text)) {
-                        selected.push(kw);
+        if (chartMode === 'CATEGORY') {
+            rootStats.forEach(stat => {
+                if (selectedChartIds.has(stat.id)) {
+                    items.push({
+                        id: stat.id,
+                        label: stat.name,
+                        color: getPersistentColor(stat.id),
+                        historyPoints: stat.historySeries,
+                        forecastPoints: stat.forecastSeries
+                    });
+                }
+            });
+        } else if (chartMode === 'GROUP') {
+            analyzedCategories.forEach(cat => {
+                const groupStats = getGroupStatsForCategory(cat.id);
+                groupStats.forEach(stat => {
+                    if (selectedChartIds.has(stat.id)) {
+                        items.push({
+                            id: stat.id,
+                            label: `${stat.name} (${cat.name})`,
+                            color: getPersistentColor(stat.id),
+                            historyPoints: stat.historySeries,
+                            forecastPoints: stat.forecastSeries
+                        });
                     }
                 });
             });
-        });
-        return selected;
-    }, [analyzedCategories, chartSelection]);
-
-    const handleChartSelectionChange = (keywords: string[], isSelected: boolean) => {
-        setChartSelection(prev => {
-            const newSelection = new Set(prev);
-            keywords.forEach(k => {
-                if (isSelected) newSelection.add(k);
-                else newSelection.delete(k);
-            });
-            return newSelection;
-        });
-    };
-
-    // --- 6. Effects ---
-    useLayoutEffect(() => {
-        if (listTopRef.current) {
-            listTopRef.current.scrollIntoView({
-                behavior: 'auto',
-                block: 'start',
-                inline: 'nearest'
+        } else if (chartMode === 'KEYWORD') {
+            analyzedCategories.forEach(cat => {
+                cat.groups.forEach(grp => {
+                    grp.keywords.forEach(kw => {
+                        if (selectedChartIds.has(kw.text)) {
+                            const historyPoints: any[] = [];
+                            kw.history?.monthly_search_volumes.forEach(pt => {
+                                historyPoints.push({
+                                    date: Date.UTC(pt.year, MONTH_MAP[pt.month], 1),
+                                    value: pt.monthly_searches
+                                });
+                            });
+                            const forecastPoints: any[] = [];
+                            kw.forecast?.forecast_series.forEach(pt => {
+                                forecastPoints.push({
+                                    date: Date.UTC(pt.year, MONTH_MAP[pt.month], 1),
+                                    value: pt.search_volume_forecast
+                                });
+                            });
+                            items.push({
+                                id: kw.text,
+                                label: kw.text,
+                                color: getPersistentColor(kw.text),
+                                historyPoints,
+                                forecastPoints
+                            });
+                        }
+                    });
+                });
             });
         }
-    }, [viewLevel, selectedCategoryId, selectedGroupId, chartSelection.size, sortConfig]);
+        return items;
+    }, [chartMode, selectedChartIds, rootStats, analyzedCategories, getGroupStatsForCategory]);
 
-    // --- 7. Handlers ---
-    const handleCategoryClick = (id: string) => {
-        setSelectedCategoryId(id);
-        setViewLevel('CATEGORY');
+
+    // --- Chart Selection Logic ---
+    const handleToggleChartItem = useCallback((id: string, type: ChartMode, isSelected: boolean) => {
+        if (!type) return;
+
+        if (chartMode !== type && isSelected) {
+            setChartMode(type);
+            setSelectedChartIds(new Set([id]));
+            return;
+        }
+
+        if (chartMode === type || chartMode === null) {
+            if (chartMode === null && isSelected) setChartMode(type);
+            setSelectedChartIds(prev => {
+                const next = new Set(prev);
+                if (isSelected) next.add(id);
+                else next.delete(id);
+                if (next.size === 0) setChartMode(null);
+                return next;
+            });
+        }
+    }, [chartMode]);
+
+    const handleKeywordSelectionChange = useCallback((keywords: string[], isSelected: boolean) => {
+        if (chartMode !== 'KEYWORD' && isSelected) {
+            setChartMode('KEYWORD');
+            setSelectedChartIds(new Set(keywords));
+            return;
+        }
+        setSelectedChartIds(prev => {
+            const next = new Set(prev);
+            keywords.forEach(k => {
+                if (isSelected) next.add(k);
+                else next.delete(k);
+            });
+            if (next.size === 0) setChartMode(null);
+            return next;
+        });
+    }, [chartMode]);
+
+    const handleClearChart = () => {
+        setSelectedChartIds(new Set());
+        setChartMode(null);
     };
 
-    const handleGroupClick = (id: string) => {
-        setSelectedGroupId(id);
-        setViewLevel('GROUP');
-    };
+    // --- Effects ---
+    useLayoutEffect(() => {
+        if (listTopRef.current) {
+            listTopRef.current.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'nearest' });
+        }
+    }, [viewLevel, selectedCategoryId, selectedGroupId, sortConfig]);
 
-    const handleReset = () => {
-        setViewLevel('ROOT');
-        setSelectedCategoryId(null);
-        setSelectedGroupId(null);
-    };
-
-    const handleGoToCategory = () => {
-        setViewLevel('CATEGORY');
-        setSelectedGroupId(null);
-    };
-
-    const handleSortChange = (option: SelectOption | null) => {
-        if (!option) return;
-        const [field, order] = option.id.split('_');
-        setSortConfig({ field: field as SortField, order: order as SortOrder });
-    };
-
-    // --- 8. Derived Data for Views ---
-    const currentCategory = useMemo(() =>
-            analyzedCategories.find(c => c.id === selectedCategoryId),
-        [analyzedCategories, selectedCategoryId]);
-
-    const currentGroup = useMemo(() =>
-            currentCategory?.groups.find(g => g.id === selectedGroupId),
-        [currentCategory, selectedGroupId]);
+    // --- Derived State ---
+    const currentCategory = useMemo(() => analyzedCategories.find(c => c.id === selectedCategoryId), [analyzedCategories, selectedCategoryId]);
+    const currentGroup = useMemo(() => currentCategory?.groups.find(g => g.id === selectedGroupId), [currentCategory, selectedGroupId]);
 
     const sortedRootStats = useMemo(() => getSortedStats(rootStats), [rootStats, sortConfig]);
     const sortedCategoryGroupStats = useMemo(() =>
             selectedCategoryId ? getSortedStats(getGroupStatsForCategory(selectedCategoryId)) : [],
-        [selectedCategoryId, analyzedCategories, sortConfig]);
+        [selectedCategoryId, analyzedCategories, sortConfig, getGroupStatsForCategory]);
 
     const countryName = countryId ? (GEO_TARGET_REVERSE_MAP[countryId] || 'Unknown Region') : 'N/A';
     const languageName = languageId ? (LANGUAGE_REVERSE_MAP[languageId] || 'Unknown Language') : 'N/A';
+    const currentSortOption = useMemo(() => SORT_OPTIONS.find(opt => opt.id === `${sortConfig.field}_${sortConfig.order}`) || SORT_OPTIONS[0], [sortConfig]);
 
-    const currentSortOption = useMemo(() =>
-            SORT_OPTIONS.find(opt => opt.id === `${sortConfig.field}_${sortConfig.order}`) || SORT_OPTIONS[0],
-        [sortConfig]);
+    // --- Handlers ---
+    const handleCategoryClick = useCallback((id: string) => { setSelectedCategoryId(id); setViewLevel('CATEGORY'); }, []);
+    const handleGroupClick = useCallback((id: string) => { setSelectedGroupId(id); setViewLevel('GROUP'); }, []);
+    const handleReset = () => { setViewLevel('ROOT'); setSelectedCategoryId(null); setSelectedGroupId(null); };
+    const handleGoToCategory = () => { setViewLevel('CATEGORY'); setSelectedGroupId(null); };
+
+    // ▼▼▼ FIX: Explicit type casting ▼▼▼
+    const handleSortChange = (opt: SelectOption | null) => {
+        if(opt) {
+            const [f, o] = opt.id.split('_');
+            setSortConfig({ field: f as SortField, order: o as SortOrder });
+        }
+    };
+
+    const getChartModeLabel = () => {
+        if (!chartMode) return '';
+        const count = selectedChartIds.size;
+        const singular = chartMode.toLowerCase();
+        if (count === 1) return singular;
+        if (singular === 'category') return 'categories';
+        return `${singular}s`;
+    };
 
     return (
         <PageLayout>
             <div className="max-w-7xl mx-auto p-6">
 
-                {/* Header Section */}
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Keyword Analysis</h1>
                         <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                            <span className="font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
-                                {countryName}
-                            </span>
+                            <span className="font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{countryName}</span>
                             <span className="text-gray-300">•</span>
-                            <span className="font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
-                                {languageName}
-                            </span>
+                            <span className="font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{languageName}</span>
                         </div>
                     </div>
-
-                    <button
-                        onClick={() => navigate('/planner')}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-all shadow-sm"
-                    >
+                    <button onClick={() => navigate('/planner')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
                         <HiArrowLeft /> Back to Selection
                     </button>
                 </div>
 
-                {/* Elegant Data Bar */}
                 <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-8">
-                    {/* Stat 1 */}
                     <div className="flex items-center gap-4 px-4 flex-1 border-r border-gray-100">
-                        <div className="p-3 bg-teal-50 text-teal-600 rounded-lg">
-                            <HiChartBar size={20} />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Volume</p>
-                            <p className="text-2xl font-bold text-gray-900 leading-none mt-1">
-                                {formatNumber(projectTotals.totalVolume)}
-                            </p>
-                        </div>
+                        <div className="p-3 bg-teal-50 text-teal-600 rounded-lg"><HiChartBar size={20} /></div>
+                        <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Volume</p><p className="text-2xl font-bold text-gray-900 leading-none mt-1">{formatNumber(projectTotals.totalVolume)}</p></div>
                     </div>
-                    {/* Stat 2 */}
                     <div className="flex items-center gap-4 px-4 flex-1 border-r border-gray-100">
-                        <div className="p-3 bg-gray-50 text-gray-500 rounded-lg">
-                            <HiCollection size={20} />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Keywords</p>
-                            <p className="text-2xl font-bold text-gray-900 leading-none mt-1">
-                                {formatNumber(projectTotals.totalKeywords)}
-                            </p>
-                        </div>
+                        <div className="p-3 bg-gray-50 text-gray-500 rounded-lg"><HiCollection size={20} /></div>
+                        <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Keywords</p><p className="text-2xl font-bold text-gray-900 leading-none mt-1">{formatNumber(projectTotals.totalKeywords)}</p></div>
                     </div>
-                    {/* Stat 3 */}
                     <div className="flex items-center gap-4 px-4 flex-1">
-                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-                            <HiLightningBolt size={20} />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Max Growth Potential</p>
-                            <p className="text-2xl font-bold text-gray-900 leading-none mt-1">
-                                {formatMultiplier(projectTotals.avgGrowth)}
-                            </p>
-                        </div>
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg"><HiLightningBolt size={20} /></div>
+                        <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Max Growth Potential</p><p className="text-2xl font-bold text-gray-900 leading-none mt-1">{formatMultiplier(projectTotals.avgGrowth)}</p></div>
                     </div>
                 </div>
 
-                {/* Main Content Area */}
                 <div className="relative min-h-[500px]">
                     <LoadingOverlay history={isLoading.history} forecast={isLoading.forecast} />
 
-                    {/* Chart */}
                     <div className="mb-8">
-                        <AnalysisChart selectedKeywords={selectedKeywordsForChart} />
+                        <div className="flex justify-between items-center mb-3 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm">
+                            <div className="flex items-center gap-2 text-sm">
+                                <span className="text-gray-500 font-medium">Active View:</span>
+                                {chartMode ? (
+                                    <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded capitalize">
+                                        {selectedChartIds.size} {getChartModeLabel()}
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-400 italic">No selection</span>
+                                )}
+                            </div>
+                            {chartMode && (
+                                <button onClick={handleClearChart} className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors">
+                                    <HiX size={14} /> Clear Selection
+                                </button>
+                            )}
+                        </div>
+
+                        <AnalysisChart items={chartDataItems} />
                     </div>
 
                     <div ref={listTopRef} className="scroll-mt-32" />
 
-                    {/* Controls Row: Breadcrumbs + Sort */}
                     <div className="flex justify-between items-center mb-4">
-                        <AnalysisBreadcrumbs
-                            viewLevel={viewLevel}
-                            categoryName={currentCategory?.name}
-                            groupName={currentGroup?.name}
-                            onReset={handleReset}
-                            onGoToCategory={handleGoToCategory}
-                        />
-
-                        {/* Sort Dropdown */}
+                        <AnalysisBreadcrumbs viewLevel={viewLevel} categoryName={currentCategory?.name} groupName={currentGroup?.name} onReset={handleReset} onGoToCategory={handleGoToCategory} />
                         <div className="flex items-center gap-3">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sort by</span>
                             <div className="w-56">
-                                <SearchableSelect
-                                    value={currentSortOption}
-                                    onChange={handleSortChange}
-                                    options={SORT_OPTIONS}
-                                    placeholder="Sort by..."
-                                    instanceId="sort-dropdown"
-                                />
+                                <SearchableSelect value={currentSortOption} onChange={handleSortChange} options={SORT_OPTIONS} placeholder="Sort by..." instanceId="sort-dropdown" />
                             </div>
                         </div>
                     </div>
 
-                    {/* --- VIEW LEVEL 1: ROOT (Categories List) --- */}
                     {viewLevel === 'ROOT' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-
                             {sortedRootStats.map(stat => (
                                 <AnalysisSummaryRow
                                     key={stat.id}
                                     stats={stat}
-                                    onClick={() => handleCategoryClick(stat.id)}
+                                    onRowClick={handleCategoryClick}
+                                    isSelected={chartMode === 'CATEGORY' && selectedChartIds.has(stat.id)}
+                                    selectionColor={selectedChartIds.has(stat.id) ? getPersistentColor(stat.id) : undefined}
+                                    onToggleSelection={handleToggleChartItem}
                                 />
                             ))}
-
-                            {sortedRootStats.length === 0 && !isLoading.history && (
-                                <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
-                                    No categories found in analysis.
-                                </div>
-                            )}
+                            {sortedRootStats.length === 0 && !isLoading.history && <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">No categories found in analysis.</div>}
                         </div>
                     )}
 
-                    {/* --- VIEW LEVEL 2: CATEGORY (Groups List) --- */}
                     {viewLevel === 'CATEGORY' && currentCategory && (
                         <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-
                             {sortedCategoryGroupStats.map(stat => (
                                 <AnalysisSummaryRow
                                     key={stat.id}
                                     stats={stat}
-                                    onClick={() => handleGroupClick(stat.id)}
+                                    onRowClick={handleGroupClick}
+                                    isSelected={chartMode === 'GROUP' && selectedChartIds.has(stat.id)}
+                                    selectionColor={selectedChartIds.has(stat.id) ? getPersistentColor(stat.id) : undefined}
+                                    onToggleSelection={handleToggleChartItem}
                                 />
                             ))}
                         </div>
                     )}
 
-                    {/* --- VIEW LEVEL 3: GROUP (Keywords List) --- */}
                     {viewLevel === 'GROUP' && currentGroup && (
                         <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                             <AnalyzedGroup
                                 group={currentGroup}
-                                chartSelection={chartSelection}
-                                onChartSelectionChange={handleChartSelectionChange}
+                                chartSelection={chartMode === 'KEYWORD' ? selectedChartIds : new Set()}
+                                onChartSelectionChange={handleKeywordSelectionChange}
                                 sortConfig={sortConfig}
                             />
                         </div>

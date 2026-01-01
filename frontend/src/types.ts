@@ -198,26 +198,38 @@ export interface AnalyzedCategory {
     groups: AnalyzedGroup[];
 }
 
-// ▼▼▼ UPDATED: AggregatedStats now supports Forecast Columns ▼▼▼
+// Data point for charting
+export interface TimeSeriesPoint {
+    date: number; // timestamp
+    value: number;
+}
+
 export interface AggregatedStats {
     id: string;
     name: string;
     type: 'CATEGORY' | 'GROUP';
     itemCount: number;
+    validItemCount: number; // ▼▼▼ NEW: Tracks items with actual data ▼▼▼
     totalVolume: number;
     avgCpc: number;
     avgCompetition: number;
-    // New Weighted Forecast Metrics
+
+    // Forecast Metrics
     forecastCurrent: number;
-    forecastYoY: number; // Weighted Average
-    forecast1M: number;  // Weighted Average
-    forecast3M: number;  // Weighted Average
-    forecast6M: number;  // Weighted Average
+    forecastYoY: number;
+    forecast1M: number;
+    forecast3M: number;
+    forecast6M: number;
+
+    historySeries: TimeSeriesPoint[];
+    forecastSeries: TimeSeriesPoint[];
+
     labels: string[];
     originalRef: AnalyzedCategory | AnalyzedGroup;
 }
 
 export type ViewLevel = 'ROOT' | 'CATEGORY' | 'GROUP';
+export type ChartMode = 'CATEGORY' | 'GROUP' | 'KEYWORD' | null;
 
 // --- Scanner Types ---
 export interface ScannerConfig {
@@ -322,7 +334,7 @@ export interface MessageResponse {
     message: string;
 }
 
-// ▼▼▼ NEW: Sorting Types ▼▼▼
+// Sorting Types
 export type SortField = 'NAME' | 'VOLUME' | 'GROWTH' | 'COMPETITION';
 export type SortOrder = 'ASC' | 'DESC';
 

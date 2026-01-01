@@ -1,8 +1,8 @@
 .rowContainer {
     display: grid;
     /* === UNIFIED GRID DEFINITION === */
-    /* 3rem (Icon + Gap) | Name | Vol | Comp | CPC || Cur | YoY | 1M | 3M | 6M */
-    grid-template-columns: 3rem minmax(180px, 1fr) 5.5rem 5rem 5rem 6rem 4.5rem 4.5rem 4.5rem 4.5rem;
+    /* Checkbox | Icon | Name | Vol | Comp | CPC || Cur | YoY | 1M | 3M | 6M */
+    grid-template-columns: 2rem 2.5rem minmax(180px, 1fr) 5.5rem 5rem 5rem 6rem 4.5rem 4.5rem 4.5rem 4.5rem;
     gap: 0.5rem;
     align-items: center;
     padding: 1.25rem 1.5rem;
@@ -13,6 +13,8 @@
     transition: all 0.2s ease-in-out;
     cursor: pointer;
     position: relative;
+    /* Ensure the container itself doesn't block events to children */
+    z-index: 1;
 }
 
 .rowContainer:hover {
@@ -22,12 +24,70 @@
     z-index: 10;
 }
 
+.rowContainer.disabled {
+    opacity: 0.5;
+    background-color: #f9fafb;
+    pointer-events: none;
+}
+
+/* ▼▼▼ EXPANDED CLICK TARGET ▼▼▼ */
+.checkboxWrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%; /* Fill the grid cell vertically */
+    width: 100%;  /* Fill the grid cell horizontally */
+    cursor: pointer;
+    /* Negative margins to pull it to the edge, making it an even bigger target */
+    margin-left: -0.5rem;
+    padding-left: 0.5rem;
+}
+
+.checkbox {
+    appearance: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    border: 1.5px solid #d1d5db;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    display: grid;
+    place-content: center;
+    margin: 0;
+    transition: all 0.15s ease-in-out;
+}
+
+.checkbox:disabled {
+    cursor: not-allowed;
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+}
+
+.checkbox::before {
+    content: "";
+    width: 0.65rem;
+    height: 0.65rem;
+    transform: scale(0);
+    box-shadow: inset 1em 1em white;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    transition: 0.15s transform ease-in-out;
+}
+
+/* Default checked style (overridden by inline styles for dynamic colors) */
+.checkbox:checked {
+    background-color: #14b8a6; /* teal-500 */
+    border-color: #14b8a6;
+}
+
+.checkbox:checked::before {
+    transform: scale(1);
+}
+
 .iconWrapper {
     display: flex;
     justify-content: center;
     align-items: center;
-    color: #0f766e; /* teal-700 */
-    background-color: #f0fdfa; /* teal-50 */
+    color: #0f766e;
+    background-color: #f0fdfa;
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 0.5rem;
@@ -43,7 +103,7 @@
 
 .nameText {
     font-weight: 600;
-    color: #111827; /* gray-900 */
+    color: #111827;
     font-size: 1rem;
     white-space: nowrap;
     overflow: hidden;
@@ -53,7 +113,7 @@
 
 .subText {
     font-size: 0.75rem;
-    color: #6b7280; /* gray-500 */
+    color: #6b7280;
     margin-top: 0.25rem;
     font-weight: 500;
 }
@@ -61,7 +121,7 @@
 .statCol {
     text-align: right;
     font-size: 0.9rem;
-    color: #374151; /* gray-700 */
+    color: #374151;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
 }
@@ -76,31 +136,21 @@
     letter-spacing: 0.025em;
 }
 
-/* Forecast specific styles */
 .forecastStart {
-    border-left: 1px solid #e0e7ff; /* indigo-100 */
+    border-left: 1px solid #e0e7ff;
     padding-left: 1rem;
 }
 
 .forecastCol {
     text-align: right;
     font-size: 0.9rem;
-    color: #6366f1; /* indigo-500 */
+    color: #6366f1;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
-/* ▼▼▼ NEW: Make labels inside forecast columns purple ▼▼▼ */
 .forecastCol .statLabel {
-    color: #818cf8; /* indigo-400 */
-}
-
-.growthPositive {
-    color: #10b981;
-}
-
-.growthNegative {
-    color: #ef4444;
+    color: #818cf8;
 }
 
 .actionCol {

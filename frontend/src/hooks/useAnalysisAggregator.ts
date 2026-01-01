@@ -1,89 +1,113 @@
 import { useMemo } from 'react';
-import { AnalyzedCategory, AnalyzedKeyword, AggregatedStats } from '../types';
+import { AnalyzedCategory, AnalyzedKeyword, AggregatedStats, TimeSeriesPoint } from '../types';
+import { MONTH_MAP } from '../constants';
 
-/**
- * Calculates aggregated statistics for hierarchical data.
- * Updates: Now calculates Weighted Averages for Forecast Deltas.
- */
 export const useAnalysisAggregator = (analyzedCategories: AnalyzedCategory[]) => {
 
     const aggregateKeywords = (keywords: AnalyzedKeyword[], id: string, name: string, type: 'CATEGORY' | 'GROUP', originalRef: any): AggregatedStats => {
         let totalVol = 0;
-        let totalCpc = 0;
-        let totalComp = 0;
+        let weightedCpc = 0;
+        let weightedComp = 0;
 
-        // Forecast Accumulators (Weighted)
         let sumForecastCurrent = 0;
         let weightedYoY = 0;
         let weighted1M = 0;
         let weighted3M = 0;
         let weighted6M = 0;
 
-        // Denominator for weighting (Total Volume of keywords that have valid forecast data)
         let totalForecastWeightVolume = 0;
+        let validKeywordsCount = 0; // For Historical Averages
+        let chartableKeywordsCount = 0; // For Checkbox Disabling (Any valid data)
 
-        let validKeywordsCount = 0;
+        // Series Aggregation Maps
+        const historyMap = new Map<number, number>();
+        const forecastMap = new Map<number, number>();
 
         keywords.forEach(kw => {
+            const hasHistory = !!kw.history;
+            const hasForecast = !!kw.forecast;
+
+            if (hasHistory || hasForecast) {
+                chartableKeywordsCount++;
+            }
+
             const vol = kw.history?.avg_monthly_searches || 0;
             const cpc = kw.history?.average_cpc_micros || 0;
             const comp = kw.history?.competition_index || 0;
-            const hasHistory = !!kw.history;
 
-            // Historical Aggregation
+            // --- 1. Historical Aggregation ---
             if (hasHistory) {
                 totalVol += vol;
-                totalCpc += cpc; // Simple sum for now, usually avg requires division
-                totalComp += comp;
+                weightedCpc += cpc * vol;
+                weightedComp += comp * vol;
                 validKeywordsCount++;
+
+                kw.history?.monthly_search_volumes.forEach(pt => {
+                    const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
+                    historyMap.set(ts, (historyMap.get(ts) || 0) + pt.monthly_searches);
+                });
             }
 
-            // Forecast Aggregation (Weighted by Volume)
-            if (kw.forecast) {
+            // --- 2. Forecast Aggregation ---
+            if (hasForecast && kw.forecast) {
                 const curVol = kw.forecast.current_month_expected_volume || 0;
                 sumForecastCurrent += curVol;
 
-                // We use current volume as weight. If 0, we use 1 to avoid data loss if all are 0.
                 const weight = curVol > 0 ? curVol : (vol > 0 ? vol : 1);
-
                 totalForecastWeightVolume += weight;
 
                 weightedYoY += (kw.forecast.annual_growth_rate || 0) * weight;
                 weighted1M += (kw.forecast.expected_increase_1m || 0) * weight;
                 weighted3M += (kw.forecast.expected_increase_3m || 0) * weight;
                 weighted6M += (kw.forecast.expected_increase_6m || 0) * weight;
+
+                kw.forecast.forecast_series.forEach(pt => {
+                    const ts = Date.UTC(pt.year, MONTH_MAP[pt.month], 1);
+                    forecastMap.set(ts, (forecastMap.get(ts) || 0) + pt.search_volume_forecast);
+                });
             }
         });
 
-        // Calculate Averages
-        const avgCpc = validKeywordsCount > 0 ? totalCpc / validKeywordsCount : 0;
-        const avgComp = validKeywordsCount > 0 ? totalComp / validKeywordsCount : 0;
+        // Calculate Weighted Averages
+        const avgCpc = totalVol > 0 ? weightedCpc / totalVol : (validKeywordsCount > 0 ? weightedCpc : 0);
+        const avgComp = totalVol > 0 ? weightedComp / totalVol : (validKeywordsCount > 0 ? weightedComp : 0);
 
-        // Calculate Weighted Forecast Averages
-        const safeWeight = totalForecastWeightVolume > 0 ? totalForecastWeightVolume : 1;
+        const safeForecastWeight = totalForecastWeightVolume > 0 ? totalForecastWeightVolume : 1;
+
+        // Convert Maps to Arrays
+        const historySeries: TimeSeriesPoint[] = Array.from(historyMap.entries())
+            .map(([date, value]) => ({ date, value }))
+            .sort((a, b) => a.date - b.date);
+
+        const forecastSeries: TimeSeriesPoint[] = Array.from(forecastMap.entries())
+            .map(([date, value]) => ({ date, value }))
+            .sort((a, b) => a.date - b.date);
 
         return {
             id,
             name,
             type,
             itemCount: keywords.length,
+            validItemCount: chartableKeywordsCount, // ▼▼▼ NEW ▼▼▼
             totalVolume: totalVol,
             avgCpc: avgCpc,
             avgCompetition: avgComp,
 
-            // New Aggregated Forecasts
             forecastCurrent: sumForecastCurrent,
-            forecastYoY: weightedYoY / safeWeight,
-            forecast1M: weighted1M / safeWeight,
-            forecast3M: weighted3M / safeWeight,
-            forecast6M: weighted6M / safeWeight,
+            forecastYoY: weightedYoY / safeForecastWeight,
+            forecast1M: weighted1M / safeForecastWeight,
+            forecast3M: weighted3M / safeForecastWeight,
+            forecast6M: weighted6M / safeForecastWeight,
+
+            historySeries,
+            forecastSeries,
 
             labels: [],
             originalRef
         };
     };
 
-    // 1. Root Level Aggregation (List of Categories)
+    // 1. Root Level
     const rootStats = useMemo(() => {
         return analyzedCategories.map(cat => {
             const allKeywords = cat.groups.flatMap(g => g.keywords);
@@ -91,7 +115,7 @@ export const useAnalysisAggregator = (analyzedCategories: AnalyzedCategory[]) =>
         });
     }, [analyzedCategories]);
 
-    // 2. Category Level Aggregation (List of Groups)
+    // 2. Category Level
     const getGroupStatsForCategory = (categoryId: string) => {
         const category = analyzedCategories.find(c => c.id === categoryId);
         if (!category) return [];
@@ -106,7 +130,6 @@ export const useAnalysisAggregator = (analyzedCategories: AnalyzedCategory[]) =>
         return rootStats.reduce((acc, curr) => ({
             totalVolume: acc.totalVolume + curr.totalVolume,
             totalKeywords: acc.totalKeywords + curr.itemCount,
-            // Use weighted avg for project wide growth
             avgGrowth: Math.max(acc.avgGrowth, curr.forecastYoY)
         }), { totalVolume: 0, totalKeywords: 0, avgGrowth: 0 });
     }, [rootStats]);

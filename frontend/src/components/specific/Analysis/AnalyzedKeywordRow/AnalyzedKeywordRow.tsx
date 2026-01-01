@@ -2,7 +2,7 @@ import React from 'react';
 import { AnalyzedKeyword } from '../../../../types';
 import styles from './AnalyzedKeywordRow.module.css';
 import {
-    formatCompetition, // ▼▼▼ Imported
+    formatCompetition,
     formatCurrency,
     formatMultiplier,
     formatNumber,
@@ -22,11 +22,7 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
                                              }) => {
     const { text, history, forecast } = data;
 
-    // A keyword is disabled ONLY if both data sources have finished loading (are not undefined)
-    // AND both returned null (no data found).
     const isDisabled = history === null && forecast === null;
-
-    // Visually force unchecked if disabled, regardless of selection state
     const isChecked = isSelectedForChart && !isDisabled;
 
     return (
@@ -48,7 +44,6 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
             <div className={styles.stat} title="Average Monthly Searches">
                 {renderStat(history?.avg_monthly_searches, history === undefined, formatNumber)}
             </div>
-            {/* ▼▼▼ APPLIED FORMATTER ▼▼▼ */}
             <div className={styles.stat} title="Competition Level">
                 {renderStat(history?.competition, history === undefined, formatCompetition)}
             </div>
@@ -76,4 +71,5 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
     );
 };
 
-export default AnalyzedKeywordRow;
+// ▼▼▼ PERFORMANCE FIX: Memoize ▼▼▼
+export default React.memo(AnalyzedKeywordRow);
