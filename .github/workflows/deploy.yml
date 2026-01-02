@@ -1,0 +1,76 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: registry.digitalocean.com
+  IMAGE_NAME: mynextcampaign/app
+  FRONTEND_IMAGE_NAME: mynextcampaign/frontend
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 1200
+
+      # --- BUILD BACKEND ---
+      - name: Build Backend
+        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ./backend
+
+      - name: Push Backend
+        run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      # --- BUILD FRONTEND ---
+      - name: Build Frontend
+        # We pass the GitHub Variable into the Docker Build Arg
+        run: |
+          docker build \
+            --build-arg VITE_API_URL=${{ vars.VITE_API_URL }} \
+            -t ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest \
+            ./frontend
+
+      - name: Push Frontend
+        run: docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+
+      # --- COPY COMPOSE FILE ---
+      - name: Copy Production Compose File
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/root"
+
+      # --- DEPLOY ---
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Login
+            docker login -u ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }} -p ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }} registry.digitalocean.com
+            
+            # Pull new images
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+            
+            # RESTART (Using correct command)
+            docker compose -f docker-compose.prod.yml down || true
+            docker compose -f docker-compose.prod.yml up -d
+            
+            # Cleanup
+            docker system prune -f

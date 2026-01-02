@@ -7,16 +7,12 @@ services:
 
   # --- Frontend (Hot Reload) ---
   frontend:
+    build:
+      context: ./frontend
+      target: base  # <--- CRITICAL FIX: Stops build at Node stage, ignoring Nginx
     volumes:
-      # 1. Mount source code for live updates
       - ./frontend:/app
-
-      # 2. ANONYMOUS VOLUME TRICK (CRITICAL)
-      # Prevents host node_modules from overwriting container node_modules
       - /app/node_modules
-
-    # Enable polling for hot reload (sometimes needed on Windows/WSL)
-    # We pass --host to bind to 0.0.0.0
     command: npm run dev -- --host
 
   # --- CPU Worker (Live Code) ---

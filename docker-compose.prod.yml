@@ -1,0 +1,64 @@
+services:
+  # --- 1. Database ---
+  # REMOVED: Using Managed Database from DigitalOcean (Defined in .env)
+
+  # --- 2. Broker ---
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # --- 3. Backend API ---
+  backend:
+    image: registry.digitalocean.com/mynextcampaign/app:latest
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    command: /app/scripts/start.sh
+
+  # --- 4. Frontend (Nginx) ---
+  frontend:
+    image: registry.digitalocean.com/mynextcampaign/frontend:latest
+    restart: always
+    ports:
+      - "80:80" # Maps Droplet port 8080 to Nginx port 80
+    depends_on:
+      - backend
+
+  # --- 5. Worker 1: CPU ---
+  worker_cpu:
+    image: registry.digitalocean.com/mynextcampaign/app:latest
+    restart: always
+    command: celery -A app.core.celery_app worker -Q cpu_heavy --pool=solo --loglevel=info
+    depends_on:
+      - backend
+      - redis
+    env_file:
+      - .env
+
+  # --- 6. Worker 2: I/O ---
+  worker_io:
+    image: registry.digitalocean.com/mynextcampaign/app:latest
+    restart: always
+    command: celery -A app.core.celery_app worker -Q io_heavy --pool=threads --concurrency=20 --loglevel=info
+    depends_on:
+      - backend
+      - redis
+    env_file:
+      - .env
+
+  # --- 7. Monitoring ---
+  flower:
+    image: mher/flower
+    restart: always
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis

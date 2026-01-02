@@ -1,22 +1,29 @@
-# 1. Base Image: Node 20 on Alpine Linux (Lightweight)
-FROM node:20-alpine
-
-# 2. Set Working Directory
+# --- Stage 1: Base ---
+FROM node:20-alpine as base
 WORKDIR /app
-
-# 3. Install Dependencies
-# Copy package.json and lockfile first to leverage Docker caching.
 COPY package.json package-lock.json ./
-
-# Use 'npm ci' for deterministic builds
 RUN npm ci
-
-# 4. Copy Source Code
 COPY . .
 
-# 5. Expose Port 8080 (Updated from 5173)
-EXPOSE 8080
+# --- Stage 2: Build ---
+FROM base as build-stage
 
-# 6. Default Command
-# We pass '--host' to ensure Vite listens on 0.0.0.0
-CMD ["npm", "run", "dev", "--", "--host"]
+# Catch the build argument
+ARG VITE_API_URL
+# Set it as an environment variable for the build process
+ENV VITE_API_URL=$VITE_API_URL
+
+# Build (Vite will read the env var here)
+RUN npx vite build
+
+# --- Stage 3: Production ---
+FROM nginx:stable-alpine as production-stage
+
+# 1. Copy the built React files
+COPY --from=build-stage /app/dist /usr/share/nginx/html
+
+# 2. COPY THE CUSTOM NGINX CONFIG (This fixes the 404 routing issue)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
