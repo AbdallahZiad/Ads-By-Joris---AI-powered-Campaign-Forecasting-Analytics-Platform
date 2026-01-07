@@ -116,10 +116,11 @@ const GoogleAdsManager: React.FC = () => {
 
     const isAnyActionPending = autoLinkMutation.isPending || applyLabelsMutation.isPending || removeLabelsMutation.isPending || labelingPoller.isLoading;
 
+    // ▼▼▼ FIX: Dynamic Redirect URI ▼▼▼
     const linkGoogleAds = useGoogleLogin({
         flow: 'auth-code',
         ux_mode: 'redirect',
-        redirect_uri: 'http://localhost:8080',
+        redirect_uri: window.location.origin, // Dynamically set based on current domain
         scope: 'https://www.googleapis.com/auth/adwords',
         select_account: true,
     });

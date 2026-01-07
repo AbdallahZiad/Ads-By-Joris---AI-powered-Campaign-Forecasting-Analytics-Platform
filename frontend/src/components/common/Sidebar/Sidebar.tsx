@@ -1,7 +1,5 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
 import {
     HiOutlineCollection,
     HiOutlineChartBar,
@@ -117,8 +115,7 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasAnalysisData
                     onClick={() => onNavigate('analysis')}
                 />
 
-                {/* ▼▼▼ DISABLED: TEMPORARILY HIDDEN ▼▼▼ */}
-                {/* <NavLink
+                <NavLink
                     icon={<AiOutlineGoogle size={22} />}
                     label={isAdsLinked ? "Google Ads Linked" : "Link Google Ads"}
                     active={viewMode === 'google-ads'}
@@ -130,7 +127,6 @@ const Sidebar: React.FC<SidebarProps> = ({ viewMode, onNavigate, hasAnalysisData
                         </div>
                     ) : null}
                 />
-                */}
             </div>
 
             <div className={styles.navSection}>

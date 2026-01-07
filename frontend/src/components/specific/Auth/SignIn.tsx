@@ -46,10 +46,11 @@ const SignIn: React.FC = () => {
         }
     }, []);
 
+    // ▼▼▼ FIX: Dynamic Redirect URI ▼▼▼
     const loginWithGoogle = useGoogleLogin({
         flow: 'auth-code',
         ux_mode: 'redirect',
-        redirect_uri: 'http://localhost:8080',
+        redirect_uri: window.location.origin, // Dynamically set based on current domain
         onError: (error) => {
             console.error('Google Login Error:', error);
             setErrorMsg('Google Sign-In failed to initialize.');
@@ -106,7 +107,6 @@ const SignIn: React.FC = () => {
                 <button
                     type="submit"
                     disabled={loginMutation.isPending || googleMutation.isPending}
-                    // ▼▼▼ FIX: Restored Brand Color (Teal) ▼▼▼
                     className="w-full py-3 px-4 bg-teal-600 text-white font-semibold rounded-xl shadow-lg hover:bg-teal-700 focus:ring-4 focus:ring-teal-200 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     {loginMutation.isPending || googleMutation.isPending ? 'Signing in...' : 'Sign In'}

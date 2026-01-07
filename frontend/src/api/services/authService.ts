@@ -10,15 +10,23 @@ export const authService = {
         return apiClient.post<TokenResponse>('/api/v1/login', data);
     },
 
+    // ▼▼▼ FIX: Dynamic Redirect URI for Login ▼▼▼
     loginGoogle: async (code: string): Promise<TokenResponse> => {
-        return apiClient.post<TokenResponse>('/api/v1/login/google', { code });
+        return apiClient.post<TokenResponse>('/api/v1/login/google', {
+            code,
+            redirect_uri: window.location.origin
+        });
     },
 
-    // ▼▼▼ FIX: Updated Endpoint to match Backend ▼▼▼
+    // ▼▼▼ FIX: Dynamic Redirect URI for Linking ▼▼▼
     linkGoogleAds: async (code: string): Promise<MessageResponse> => {
+        // Automatically determine the redirect base (localhost:8080 or https://mynextcampaign.com)
+        // We use window.location.origin to ensure it matches exactly what was sent during the initial OAuth request.
+        const redirectUri = window.location.origin;
+
         return apiClient.post<MessageResponse>('/api/v1/users/me/google-ads/link', {
             code,
-            redirect_uri: 'http://localhost:8080' // Must match Google Console exactly
+            redirect_uri: redirectUri
         });
     },
 
