@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../../../../api/services/projectService';
-import { Project, Keyword } from '../../../../types';
+import { Project, Category, Group, Keyword } from '../../../../types';
 
 export const useProjectSync = (currentProjectId: string | null) => {
     const queryClient = useQueryClient();
@@ -34,21 +34,59 @@ export const useProjectSync = (currentProjectId: string | null) => {
         }
     });
 
-    // ▼▼▼ NEW: Delete Project ▼▼▼
     const deleteProjectMutation = useMutation({
         mutationFn: projectService.deleteProject,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects-list'] });
-            // If the active project was deleted, the parent component handles clearing the ID
         }
     });
 
     // --- Category Mutations ---
 
+    // ▼▼▼ FIX: Optimistic Update + Manual Cache Update (No Invalidation) ▼▼▼
     const createCategoryMutation = useMutation({
         mutationFn: (vars: { projectId: string, name: string }) =>
             projectService.createCategory(vars.projectId, { name: vars.name }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] })
+
+        onMutate: async (vars) => {
+            await queryClient.cancelQueries({ queryKey: ['project', currentProjectId] });
+            const previous = queryClient.getQueryData<Project>(['project', currentProjectId]);
+
+            const tempId = `temp_cat_${Date.now()}`;
+
+            if (previous) {
+                const newCategory: Category = {
+                    id: tempId,
+                    name: vars.name,
+                    groups: []
+                };
+
+                queryClient.setQueryData<Project>(['project', currentProjectId], {
+                    ...previous,
+                    categories: [...previous.categories, newCategory] // Append to END
+                });
+            }
+
+            return { previous, tempId };
+        },
+        onSuccess: (data, _vars, context) => {
+            // Replace the temp category with the real one, preserving order
+            const current = queryClient.getQueryData<Project>(['project', currentProjectId]);
+            if (current && context?.tempId) {
+                queryClient.setQueryData<Project>(['project', currentProjectId], {
+                    ...current,
+                    categories: current.categories.map(c =>
+                        c.id === context.tempId ? { ...c, ...data as any } : c
+                    )
+                });
+            }
+            // DO NOT INVALIDATE here to prevent re-ordering
+        },
+        onError: (_err, _vars, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(['project', currentProjectId], context.previous);
+            }
+        }
     });
 
     const updateCategoryMutation = useMutation({
@@ -83,10 +121,62 @@ export const useProjectSync = (currentProjectId: string | null) => {
 
     // --- Group Mutations ---
 
+    // ▼▼▼ FIX: Optimistic Update + Manual Cache Update (No Invalidation) ▼▼▼
     const createGroupMutation = useMutation({
         mutationFn: (vars: { categoryId: string, name: string }) =>
             projectService.createGroup(vars.categoryId, { name: vars.name }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] })
+
+        onMutate: async (vars) => {
+            await queryClient.cancelQueries({ queryKey: ['project', currentProjectId] });
+            const previous = queryClient.getQueryData<Project>(['project', currentProjectId]);
+
+            const tempId = `temp_grp_${Date.now()}`;
+
+            if (previous) {
+                const newGroup: Group = {
+                    id: tempId,
+                    name: vars.name,
+                    keywords: []
+                };
+
+                queryClient.setQueryData<Project>(['project', currentProjectId], {
+                    ...previous,
+                    categories: previous.categories.map(c => {
+                        if (c.id === vars.categoryId) {
+                            return { ...c, groups: [...c.groups, newGroup] }; // Append to END
+                        }
+                        return c;
+                    })
+                });
+            }
+            return { previous, tempId };
+        },
+        onSuccess: (data, vars, context) => {
+            // Replace temp group with real one
+            const current = queryClient.getQueryData<Project>(['project', currentProjectId]);
+            if (current && context?.tempId) {
+                queryClient.setQueryData<Project>(['project', currentProjectId], {
+                    ...current,
+                    categories: current.categories.map(c => {
+                        if (c.id === vars.categoryId) {
+                            return {
+                                ...c,
+                                groups: c.groups.map(g =>
+                                    g.id === context.tempId ? { ...g, ...data as any } : g
+                                )
+                            };
+                        }
+                        return c;
+                    })
+                });
+            }
+            // DO NOT INVALIDATE
+        },
+        onError: (_err, _vars, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(['project', currentProjectId], context.previous);
+            }
+        }
     });
 
     const updateGroupMutation = useMutation({
@@ -161,7 +251,7 @@ export const useProjectSync = (currentProjectId: string | null) => {
         // Actions
         createProject: createProjectMutation.mutateAsync,
         updateProject: updateProjectMutation.mutateAsync,
-        deleteProject: deleteProjectMutation.mutateAsync, // ▼▼▼ EXPOSED
+        deleteProject: deleteProjectMutation.mutateAsync,
 
         createCategory: createCategoryMutation.mutateAsync,
         updateCategory: updateCategoryMutation.mutateAsync,

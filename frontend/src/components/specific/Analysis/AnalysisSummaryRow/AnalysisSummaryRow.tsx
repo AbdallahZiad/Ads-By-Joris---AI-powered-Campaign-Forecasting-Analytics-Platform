@@ -1,7 +1,7 @@
 import React from 'react';
 import { HiOutlineFolder, HiOutlineCollection } from 'react-icons/hi';
 import { AggregatedStats } from '../../../../types';
-import { formatNumber, formatCurrency, formatMultiplier } from '../../../../utils/format';
+import { formatNumber, formatCurrency, formatMultiplier, renderStat } from '../../../../utils/format';
 import styles from './AnalysisSummaryRow.module.css';
 
 interface Props {
@@ -24,7 +24,7 @@ const AnalysisSummaryRow: React.FC<Props> = ({ stats, isSelected, selectionColor
     } : undefined;
 
     const handleCheckboxClick = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Stop row click
+        e.stopPropagation();
         if (!isDisabled) {
             onToggleSelection(stats.id, stats.type, !isSelected);
         }
@@ -40,14 +40,13 @@ const AnalysisSummaryRow: React.FC<Props> = ({ stats, isSelected, selectionColor
             style={dynamicStyle}
             onClick={!isDisabled ? () => onRowClick(stats.id) : undefined}
         >
-            {/* Expanded Checkbox Zone */}
             <div className={styles.checkboxWrapper} onClick={handleCheckboxClick}>
                 <input
                     type="checkbox"
                     className={styles.checkbox}
                     checked={isSelected}
                     disabled={isDisabled}
-                    onChange={() => {}} // handled by wrapper click
+                    onChange={() => {}}
                     title={isDisabled ? "No data available for charting" : `Add ${stats.type.toLowerCase()} to chart`}
                     style={isSelected && selectionColor ? {
                         backgroundColor: selectionColor,
@@ -56,12 +55,10 @@ const AnalysisSummaryRow: React.FC<Props> = ({ stats, isSelected, selectionColor
                 />
             </div>
 
-            {/* 1. Icon */}
             <div className={styles.iconWrapper}>
                 <Icon size={20} />
             </div>
 
-            {/* 2. Name */}
             <div className={styles.nameCol}>
                 <span className={styles.nameText}>{stats.name}</span>
                 <span className={styles.subText}>
@@ -74,51 +71,44 @@ const AnalysisSummaryRow: React.FC<Props> = ({ stats, isSelected, selectionColor
                 </span>
             </div>
 
-            {/* 3. Avg. Vol */}
             <div className={styles.statCol}>
                 {formatNumber(stats.totalVolume)}
                 <span className={styles.statLabel}>Avg Vol</span>
             </div>
 
-            {/* 4. Comp */}
             <div className={styles.statCol}>
                 {stats.avgCompetition.toFixed(1)}
                 <span className={styles.statLabel}>Comp</span>
             </div>
 
-            {/* 5. CPC */}
             <div className={styles.statCol}>
                 {formatCurrency(stats.avgCpc)}
                 <span className={styles.statLabel}>CPC</span>
             </div>
 
-            {/* 6. Cur. Vol (Forecast) */}
+            {/* ▼▼▼ FIX: Use renderStat for Cur Vol to support Null/Dash ▼▼▼ */}
             <div className={`${styles.statCol} ${styles.forecastStart}`}>
-                {formatNumber(stats.forecastCurrent)}
+                {renderStat(stats.forecastCurrent, false, formatNumber)}
                 <span className={styles.statLabel} style={{ color: '#818cf8' }}>Cur Vol</span>
             </div>
 
-            {/* 7. YoY */}
             <div className={styles.forecastCol}>
-                {formatMultiplier(stats.forecastYoY)}
+                {renderStat(stats.forecastYoY, false, formatMultiplier)}
                 <span className={styles.statLabel}>YoY</span>
             </div>
 
-            {/* 8. +1M */}
             <div className={styles.forecastCol}>
-                {formatMultiplier(stats.forecast1M)}
+                {renderStat(stats.forecast1M, false, formatMultiplier)}
                 <span className={styles.statLabel}>+1 M</span>
             </div>
 
-            {/* 9. +3M */}
             <div className={styles.forecastCol}>
-                {formatMultiplier(stats.forecast3M)}
+                {renderStat(stats.forecast3M, false, formatMultiplier)}
                 <span className={styles.statLabel}>+3 M</span>
             </div>
 
-            {/* 10. +6M */}
             <div className={styles.forecastCol}>
-                {formatMultiplier(stats.forecast6M)}
+                {renderStat(stats.forecast6M, false, formatMultiplier)}
                 <span className={styles.statLabel}>+6 M</span>
             </div>
         </div>

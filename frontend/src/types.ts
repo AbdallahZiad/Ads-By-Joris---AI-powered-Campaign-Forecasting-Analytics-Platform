@@ -13,6 +13,7 @@ export interface Group {
     keywords: Keyword[];
     google_ad_group_id?: string | null;
     applied_labels?: string[];
+    created_at?: string; // ▼▼▼ Added for robustness
 }
 
 export interface Category {
@@ -21,6 +22,7 @@ export interface Category {
     groups: Group[];
     google_campaign_id?: string | null;
     applied_labels?: string[];
+    created_at?: string; // ▼▼▼ Added for robustness
 }
 
 export interface ProjectMetadata {
@@ -209,7 +211,7 @@ export interface AggregatedStats {
     name: string;
     type: 'CATEGORY' | 'GROUP';
     itemCount: number;
-    validItemCount: number; // ▼▼▼ NEW: Tracks items with actual data ▼▼▼
+    validItemCount: number;
     totalVolume: number;
     avgCpc: number;
     avgCompetition: number;
@@ -323,6 +325,7 @@ export interface TokenResponse {
 
 export interface EmailVerification {
     token: string;
+    new_password?: string;
 }
 
 export interface PasswordReset {

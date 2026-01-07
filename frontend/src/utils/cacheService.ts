@@ -2,8 +2,8 @@ import { KeywordHistoricalMetrics, KeywordForecast, SelectOption } from '../type
 import { COUNTRIES_OPTIONS, LANGUAGES_OPTIONS } from '../constants';
 
 interface CachedItem {
-    history: KeywordHistoricalMetrics | null;
-    forecast: KeywordForecast | null;
+    history?: KeywordHistoricalMetrics | null;
+    forecast?: KeywordForecast | null;
     timestamp: number;
 }
 
@@ -52,8 +52,8 @@ export const cacheService = {
         keyword: string,
         countryId: string,
         languageId: string,
-        history: KeywordHistoricalMetrics | null,
-        forecast: KeywordForecast | null
+        history: KeywordHistoricalMetrics | null | undefined,
+        forecast: KeywordForecast | null | undefined
     ) => {
         const key = cacheService.getKey(keyword, countryId, languageId);
         const data: CachedItem = { history, forecast, timestamp: Date.now() };
@@ -64,24 +64,43 @@ export const cacheService = {
         countryId: string,
         languageId: string,
         historyResults: any[],
-        forecastResults: any[]
+        forecastResults: any[],
+        attemptedKeywords: string[] = []
     ) => {
         const historyMap = new Map(historyResults.map(h => [h.text, h.keyword_metrics]));
         const forecastMap = new Map(forecastResults.map(f => [f.keyword, f]));
 
-        const allKeywords = new Set([...historyMap.keys(), ...forecastMap.keys()]);
+        const allKeywords = new Set([
+            ...historyMap.keys(),
+            ...forecastMap.keys(),
+            ...attemptedKeywords
+        ]);
 
         allKeywords.forEach(kw => {
             const existing = cacheService.getItem(kw, countryId, languageId);
-            const newHistory = historyMap.has(kw) ? historyMap.get(kw) : existing?.history;
-            const newForecast = forecastMap.has(kw) ? forecastMap.get(kw) : existing?.forecast;
+
+            // 1. History
+            let newHistory = existing?.history;
+            if (historyMap.has(kw)) {
+                newHistory = historyMap.get(kw);
+            } else if (attemptedKeywords.includes(kw) && !existing?.history) {
+                newHistory = null; // Negative Cache
+            }
+
+            // 2. Forecast
+            let newForecast = existing?.forecast;
+            if (forecastMap.has(kw)) {
+                newForecast = forecastMap.get(kw);
+            } else if (attemptedKeywords.includes(kw)) {
+                newForecast = null; // Negative Cache
+            }
 
             cacheService.setItem(
                 kw,
                 countryId,
                 languageId,
-                newHistory || null,
-                newForecast || null
+                newHistory,
+                newForecast
             );
         });
     },
@@ -94,7 +113,6 @@ export const cacheService = {
         });
     },
 
-    // ▼▼▼ NEW: Project Settings Cache Helpers ▼▼▼
     saveProjectSettings: (projectId: string, countryId?: string, languageId?: string) => {
         const payload = { countryId, languageId };
         localStorage.setItem(`${PROJECT_CONFIG_PREFIX}${projectId}`, JSON.stringify(payload));

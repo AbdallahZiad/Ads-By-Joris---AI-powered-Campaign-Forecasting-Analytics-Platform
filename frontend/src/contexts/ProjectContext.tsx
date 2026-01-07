@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Category } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -14,35 +14,97 @@ interface ProjectContextType {
     analysisInputs: AnalysisInputs | null;
     setAnalysisInputs: (inputs: AnalysisInputs | null) => void;
     hasAnalysisData: boolean;
+    // ▼▼▼ NEW: Helper to clean up analysis when deleting a project ▼▼▼
+    clearProjectAnalysis: (projectId: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
+const STORAGE_KEY_ACTIVE_ID = 'active_project_id';
+const STORAGE_KEY_ANALYSES = 'project_analyses_map';
+
 export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // ▼▼▼ FIX: Grab isLoading to prevent premature wiping on reload ▼▼▼
     const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
+    // 1. Current Project ID
     const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
-        return localStorage.getItem('active_project_id');
+        return localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
     });
 
-    const [analysisInputs, setAnalysisInputs] = useState<AnalysisInputs | null>(null);
-    const hasAnalysisData = !!analysisInputs;
+    // 2. Project Analyses Map (Persisted Dictionary: ProjectID -> AnalysisData)
+    const [projectAnalyses, setProjectAnalyses] = useState<Record<string, AnalysisInputs>>(() => {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY_ANALYSES);
+            return stored ? JSON.parse(stored) : {};
+        } catch (e) {
+            console.error("Failed to load project analyses", e);
+            return {};
+        }
+    });
 
+    // --- Persistence Effects ---
+
+    // Sync Active ID
     useEffect(() => {
         if (currentProjectId) {
-            localStorage.setItem('active_project_id', currentProjectId);
+            localStorage.setItem(STORAGE_KEY_ACTIVE_ID, currentProjectId);
         } else {
-            localStorage.removeItem('active_project_id');
+            localStorage.removeItem(STORAGE_KEY_ACTIVE_ID);
         }
     }, [currentProjectId]);
 
-    // ▼▼▼ SECURITY FIX: Only wipe if we are definitely logged out (not just loading) ▼▼▼
+    // Sync Analyses Map
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_KEY_ANALYSES, JSON.stringify(projectAnalyses));
+        } catch (e) {
+            // Handle quota exceeded gracefully (e.g., if projects are massive)
+            console.error("Failed to save project analyses to local storage (Quota Exceeded?)", e);
+        }
+    }, [projectAnalyses]);
+
+    // --- Derived State ---
+
+    // ▼▼▼ CORE LOGIC: Automatically derive the analysis inputs for the CURRENT project ▼▼▼
+    const analysisInputs = useMemo(() => {
+        if (!currentProjectId) return null;
+        return projectAnalyses[currentProjectId] || null;
+    }, [currentProjectId, projectAnalyses]);
+
+    const hasAnalysisData = !!analysisInputs;
+
+    // --- Actions ---
+
+    const setAnalysisInputs = (inputs: AnalysisInputs | null) => {
+        if (!currentProjectId) return;
+
+        setProjectAnalyses(prev => {
+            const next = { ...prev };
+            if (inputs === null) {
+                delete next[currentProjectId];
+            } else {
+                next[currentProjectId] = inputs;
+            }
+            return next;
+        });
+    };
+
+    const clearProjectAnalysis = (projectId: string) => {
+        setProjectAnalyses(prev => {
+            const next = { ...prev };
+            delete next[projectId];
+            return next;
+        });
+    };
+
+    // --- Security / Cleanup ---
+
     useEffect(() => {
         if (!isAuthLoading && !isAuthenticated) {
             setCurrentProjectId(null);
-            setAnalysisInputs(null);
-            localStorage.removeItem('active_project_id');
+            setProjectAnalyses({});
+            localStorage.removeItem(STORAGE_KEY_ACTIVE_ID);
+            localStorage.removeItem(STORAGE_KEY_ANALYSES);
         }
     }, [isAuthenticated, isAuthLoading]);
 
@@ -52,7 +114,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             setCurrentProjectId,
             analysisInputs,
             setAnalysisInputs,
-            hasAnalysisData
+            hasAnalysisData,
+            clearProjectAnalysis
         }}>
             {children}
         </ProjectContext.Provider>

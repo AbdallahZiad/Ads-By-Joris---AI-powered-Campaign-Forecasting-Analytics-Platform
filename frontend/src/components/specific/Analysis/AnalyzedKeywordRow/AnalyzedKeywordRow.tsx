@@ -22,8 +22,12 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
                                              }) => {
     const { text, history, forecast } = data;
 
+    // Disabled if we have NO history and NO forecast info (null)
     const isDisabled = history === null && forecast === null;
     const isChecked = isSelectedForChart && !isDisabled;
+
+    // Loading State for Forecast: If history is loaded but forecast is undefined
+    const isForecastLoading = history !== undefined && forecast === undefined;
 
     return (
         <div className={`${styles.rowContainer} ${isDisabled ? styles.disabled : ''}`}>
@@ -53,23 +57,22 @@ const AnalyzedKeywordRow: React.FC<Props> = ({
 
             {/* --- FORECAST DATA --- */}
             <div className={`${styles.stat} ${styles.forecastStart}`} title="Current Month Expected Volume">
-                {renderStat(forecast?.current_month_expected_volume, forecast === undefined, formatNumber)}
+                {renderStat(forecast?.current_month_expected_volume, isForecastLoading, formatNumber)}
             </div>
             <div className={styles.stat} title="Annual Growth Rate">
-                {renderStat(forecast?.annual_growth_rate, forecast === undefined, formatMultiplier)}
+                {renderStat(forecast?.annual_growth_rate, isForecastLoading, formatMultiplier)}
             </div>
             <div className={styles.stat} title="Expected Increase (1 Month)">
-                {renderStat(forecast?.expected_increase_1m, forecast === undefined, formatMultiplier)}
+                {renderStat(forecast?.expected_increase_1m, isForecastLoading, formatMultiplier)}
             </div>
             <div className={styles.stat} title="Expected Increase (3 Months)">
-                {renderStat(forecast?.expected_increase_3m, forecast === undefined, formatMultiplier)}
+                {renderStat(forecast?.expected_increase_3m, isForecastLoading, formatMultiplier)}
             </div>
             <div className={styles.stat} title="Expected Increase (6 Months)">
-                {renderStat(forecast?.expected_increase_6m, forecast === undefined, formatMultiplier)}
+                {renderStat(forecast?.expected_increase_6m, isForecastLoading, formatMultiplier)}
             </div>
         </div>
     );
 };
 
-// ▼▼▼ PERFORMANCE FIX: Memoize ▼▼▼
 export default React.memo(AnalyzedKeywordRow);

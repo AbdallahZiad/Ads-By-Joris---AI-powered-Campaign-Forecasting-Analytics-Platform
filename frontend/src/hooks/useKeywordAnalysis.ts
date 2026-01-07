@@ -4,7 +4,6 @@ import { analysisService } from '../api/services/analysisService';
 import { useTaskPoller } from './useTaskPoller';
 import { cacheService } from '../utils/cacheService';
 
-// Wrapper to strictly couple data with its source configuration
 interface FreshDataContext {
     history: GoogleAdsKeywordResponse | null;
     forecast: ForecastResponse | null;
@@ -14,52 +13,65 @@ interface FreshDataContext {
 
 export const useKeywordAnalysis = (selection: Category[], countryId?: string, languageId?: string) => {
 
-    // API State: Now strict-typed with context
     const [freshData, setFreshData] = useState<FreshDataContext | null>(null);
-
-    // Precise Loading States
     const [isFetchingHistory, setIsFetchingHistory] = useState(true);
     const [isForecasting, setIsForecasting] = useState(false);
 
-    // Config Signature Tracking to prevent loop but allow re-runs
     const lastConfigRef = useRef<string>("");
+
+    // Track keywords currently being forecasted to handle missing results (Negative Caching)
+    const pendingForecastKeywords = useRef<string[]>([]);
 
     // --- Poller for Forecast Task ---
     const poller = useTaskPoller<ForecastResponse>({
         onSuccess: (result) => {
-            // Save to cache (only if context matches current)
             if (countryId && languageId) {
-                cacheService.saveBatch(countryId, languageId, [], result.forecasts);
+                // 1. Save to Cache
+                cacheService.saveBatch(
+                    countryId,
+                    languageId,
+                    [],
+                    result.forecasts,
+                    pendingForecastKeywords.current
+                );
 
-                // Update state, but only if we are still on the same config
+                // 2. Update State to Trigger Re-render
                 setFreshData(prev => {
-                    if (prev && prev.countryId === countryId && prev.languageId === languageId) {
-                        return { ...prev, forecast: result };
+                    // Valid context check
+                    const currentCid = prev?.countryId || countryId;
+                    const currentLid = prev?.languageId || languageId;
+
+                    if (currentCid === countryId && currentLid === languageId) {
+                        return {
+                            history: prev?.history || null, // Keep existing history or null
+                            forecast: result,               // Inject new forecast
+                            countryId,
+                            languageId
+                        };
                     }
                     return prev;
                 });
             }
+            pendingForecastKeywords.current = [];
             setIsForecasting(false);
         },
         onError: (err) => {
             console.error("Forecast task failed", err);
+            pendingForecastKeywords.current = [];
             setIsForecasting(false);
             alert("Forecast Analysis failed. Please try again.");
         }
     });
 
-    // --- Data Merging Logic (Reactive & Strict) ---
+    // --- Data Merging Logic ---
     const analyzedCategories = useMemo<AnalyzedCategory[]>(() => {
         if (!selection || !countryId || !languageId) return [];
 
-        // 1. Get Keywords
         const allKeywords = selection.flatMap(c => c.groups.flatMap(g => g.keywords.map(k => k.text)));
 
-        // 2. Get Cache (Strictly scoped to current Country/Lang)
+        // Always read fresh from cache on every render
         const { found: cachedMap } = cacheService.getBatch(allKeywords, countryId, languageId);
 
-        // 3. Extract Fresh Data (Strictly validated against current Country/Lang)
-        // If the fresh data belongs to a previous config (e.g. US), ignore it immediately.
         const isValidFresh = freshData && freshData.countryId === countryId && freshData.languageId === languageId;
         const validFreshHistory = isValidFresh ? freshData.history : null;
         const validFreshForecast = isValidFresh ? freshData.forecast : null;
@@ -70,8 +82,9 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
             const cachedItem = cachedMap.get(text);
 
             return {
-                history: freshHistItem || cachedItem?.history || null,
-                forecast: freshFcItem || cachedItem?.forecast || null
+                // Priority: Fresh Data > Cache Data
+                history: freshHistItem !== undefined ? freshHistItem : cachedItem?.history,
+                forecast: freshFcItem !== undefined ? freshFcItem : cachedItem?.forecast
             };
         };
 
@@ -91,36 +104,43 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
                 })
             }))
         }));
-    }, [selection, countryId, languageId, freshData]);
+    }, [selection, countryId, languageId, freshData]); // freshData dependency ensures re-render on poll success
 
     // --- Main Orchestrator ---
     useEffect(() => {
         const executeAnalysisChain = async () => {
-            // 1. Basic Validation
             if (!selection || selection.length === 0 || !countryId || !languageId) return;
 
-            // 2. Change Detection
-            const configSignature = `${countryId}-${languageId}-${selection.length}`;
+            // ▼▼▼ FIX: Robust Config Signature (IDs based) instead of just length ▼▼▼
+            // This ensures switching from "Group A" to "Group B" (same length) triggers a refresh.
+            const selectionIdStr = JSON.stringify(
+                selection.map(c => ({
+                    id: c.id,
+                    groups: c.groups.map(g => ({ id: g.id, kws: g.keywords.length }))
+                }))
+            );
+            const configSignature = `${countryId}-${languageId}-${selectionIdStr}`;
+
             if (lastConfigRef.current === configSignature) return;
 
             lastConfigRef.current = configSignature;
 
-            // 3. Reset State & Loading (Start Fresh)
+            // Reset for new selection
             setFreshData(null);
             setIsFetchingHistory(true);
             setIsForecasting(false);
+            pendingForecastKeywords.current = [];
 
             try {
                 const allKeywords = Array.from(new Set(
                     selection.flatMap(c => c.groups.flatMap(g => g.keywords.map(k => k.text)))
                 ));
 
-                // 4. Check Cache
                 const { found: cachedMap } = cacheService.getBatch(allKeywords, countryId, languageId);
 
-                // 5. Identify Missing Data
-                const missingHistory = allKeywords.filter(k => !cachedMap.get(k)?.history);
-                const missingForecast = allKeywords.filter(k => !cachedMap.get(k)?.forecast);
+                const missingHistory = allKeywords.filter(k => !cachedMap.has(k));
+                // Only forecast if strictly undefined (not fetched yet). If null, we tried and failed previously.
+                const missingForecast = allKeywords.filter(k => cachedMap.get(k)?.forecast === undefined);
 
                 // --- PHASE 1: HISTORY ---
                 let currentHistoryData: GoogleAdsKeywordResponse | null = null;
@@ -132,7 +152,7 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
                         countryId
                     );
 
-                    // Save to State (Stamped with Context)
+                    // Update State (Partial)
                     setFreshData({
                         history: historyResponse,
                         forecast: null,
@@ -140,8 +160,7 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
                         languageId
                     });
 
-                    // Save to Cache
-                    cacheService.saveBatch(countryId, languageId, historyResponse.results, []);
+                    cacheService.saveBatch(countryId, languageId, historyResponse.results, [], missingHistory);
                     currentHistoryData = historyResponse;
                 }
 
@@ -152,16 +171,18 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
                     setIsForecasting(true);
 
                     const payloadResults: UnifiedKeywordResult[] = missingForecast.map(kw => {
-                        const freshMetric = currentHistoryData?.results.find(r => r.text === kw)?.keyword_metrics;
-                        const cachedMetric = cachedMap.get(kw)?.history;
-
-                        return {
-                            text: kw,
-                            keyword_metrics: freshMetric || cachedMetric || null
-                        };
-                    }).filter(item => item.keyword_metrics !== null);
+                        // Use fresh history if available, otherwise fall back to cache
+                        let metric = currentHistoryData?.results.find(r => r.text === kw)?.keyword_metrics;
+                        if (!metric) {
+                            metric = cachedMap.get(kw)?.history || null;
+                        }
+                        return { text: kw, keyword_metrics: metric };
+                    })
+                        .filter(item => item.keyword_metrics !== null);
 
                     if (payloadResults.length > 0) {
+                        pendingForecastKeywords.current = payloadResults.map(p => p.text);
+
                         const taskResponse = await analysisService.startForecast({
                             google_ads_data: { results: payloadResults },
                             forecast_months: 12

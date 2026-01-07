@@ -1,4 +1,3 @@
-// ... imports
 import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Category as CategoryType, Group as GroupType } from '../../../types';
@@ -21,11 +20,10 @@ import { HiPlus, HiOutlineTemplate } from 'react-icons/hi';
 
 const CategoryManagement: React.FC = () => {
     const navigate = useNavigate();
-    const { currentProjectId, setCurrentProjectId, setAnalysisInputs } = useProject();
+    const { currentProjectId, setCurrentProjectId, setAnalysisInputs, clearProjectAnalysis } = useProject();
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    // ▼▼▼ ROBUST DATA SOURCE HOOK (Simplified) ▼▼▼
     const {
         country,
         setCountry,
@@ -80,10 +78,6 @@ const CategoryManagement: React.FC = () => {
         setSelectedKeywordsByGroup
     });
 
-    // ... rest of event handlers ...
-    // (handleCreateProject, handleRenameProject, handleDeleteProject, handleAddCategory, etc.)
-    // These remain EXACTLY as provided in previous steps.
-
     const handleCreateProject = async (title: string) => {
         try {
             const newProj = await createProject({ title });
@@ -104,6 +98,7 @@ const CategoryManagement: React.FC = () => {
     const handleDeleteProject = async (id: string) => {
         try {
             await deleteProject(id);
+            clearProjectAnalysis(id);
             if (id === currentProjectId) {
                 setCurrentProjectId(null);
             }
@@ -113,27 +108,28 @@ const CategoryManagement: React.FC = () => {
         }
     };
 
-    const handleAddCategory = async () => {
+    const handleAddCategory = () => {
         if (!currentProjectId) return;
 
-        try {
-            await createCategory({ projectId: currentProjectId, name: "New Category" });
+        // ▼▼▼ FIX: Fire and forget (Optimistic Update handles the UI) ▼▼▼
+        createCategory({ projectId: currentProjectId, name: "New Category" })
+            .catch(e => console.error("Failed to create category", e));
 
-            setTimeout(() => {
-                if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTo({
-                        top: scrollContainerRef.current.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                }
-            }, 100);
-        } catch (e) {
-            console.error("Failed to create category");
-        }
+        // Scroll immediately to the optimistic item
+        setTimeout(() => {
+            if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollTo({
+                    top: scrollContainerRef.current.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
+        }, 50);
     };
 
     const handleAddGroup = (catId: string) => {
-        createGroup({ categoryId: catId, name: "New Group" });
+        // Optimistic update handles UI logic in useProjectSync
+        createGroup({ categoryId: catId, name: "New Group" })
+            .catch(e => console.error("Failed to create group", e));
     };
 
     const handleKeywordSave = async (catId: string, grpId: string, newKeywordsList: string[]) => {
