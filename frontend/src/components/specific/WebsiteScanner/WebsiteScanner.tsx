@@ -8,7 +8,8 @@ import { ScannerConfig, ScannerResponse, Category, CreateProjectTreePayload } fr
 import { useScanner } from '../../../hooks/useScanner';
 import { useProject } from '../../../contexts/ProjectContext';
 import { projectService } from '../../../api/services/projectService';
-import { cacheService } from '../../../utils/cacheService'; // ▼▼▼ NEW IMPORT
+import { cacheService } from '../../../utils/cacheService';
+import { useToast } from '../../../hooks/useToast';
 
 import ScannerHero from './components/ScannerHero';
 import ScannerConfigForm from './components/ScannerConfigForm';
@@ -21,6 +22,7 @@ const WebsiteScanner: React.FC = () => {
     const location = useLocation();
     const queryClient = useQueryClient();
     const { setCurrentProjectId, currentProjectId } = useProject();
+    const toast = useToast();
 
     const { data: activeProject } = useQuery({
         queryKey: ['project', currentProjectId],
@@ -58,7 +60,6 @@ const WebsiteScanner: React.FC = () => {
                 }
             }
 
-            // ▼▼▼ FIX: Pre-seed Cache with AI Config ▼▼▼
             if (scanResult?.google_ads_config) {
                 cacheService.saveProjectSettings(
                     newProject.id,
@@ -69,19 +70,13 @@ const WebsiteScanner: React.FC = () => {
 
             await queryClient.invalidateQueries({ queryKey: ['projects-list'] });
             setCurrentProjectId(newProject.id);
-            navigate('/planner'); // Clean navigation
+            navigate('/planner');
         },
         onError: (err) => {
             console.error("Failed to save project tree", err);
-            alert("Failed to save project. Please try again.");
+            toast.error("Failed to save the project tree. Please try again.", "Save Failed");
         }
     });
-
-    // ... rest of the file ...
-    // (normalizeUrl, checkUrlValidity, handleScan, handleAccept, handleReset, etc. remain unchanged)
-
-    // IMPORTANT: Include the rest of the component body here as is.
-    // I am omitting repeated code for brevity but make sure you keep the UI logic.
 
     const normalizeUrl = (input: string): string => {
         let url = input.trim();
@@ -109,7 +104,9 @@ const WebsiteScanner: React.FC = () => {
     const handleScan = async () => {
         const urlToScan = normalizeUrl(config.start_url);
         if (!checkUrlValidity(config.start_url)) {
-            setUrlError("Please enter a valid domain (e.g. example.com)");
+            const msg = "Please enter a valid domain (e.g. example.com)";
+            setUrlError(msg);
+            toast.error(msg, "Invalid URL");
             return;
         } else {
             setUrlError(null);
@@ -118,9 +115,21 @@ const WebsiteScanner: React.FC = () => {
         try {
             const effectiveConfig = { ...config, start_url: urlToScan };
             const response = await scanWebsite(effectiveConfig);
+
+            // ▼▼▼ FIX: Intercept Empty Results ▼▼▼
+            if (!response.structured_data || response.structured_data.length === 0) {
+                toast.warning(
+                    "The scanner accessed the site but found no extractable content. This may happen if the site uses heavy client-side rendering (SPA), blocks bots, or has no text content.",
+                    "No Data Found"
+                );
+                // We return early, keeping the user on the form so they can adjust config (e.g. disable headlines_only)
+                return;
+            }
+
             setScanResult(response);
         } catch (error) {
             console.error(error);
+            toast.error("The scan could not be completed. Please check the URL or try again later.", "Scan Failed");
         }
     };
 

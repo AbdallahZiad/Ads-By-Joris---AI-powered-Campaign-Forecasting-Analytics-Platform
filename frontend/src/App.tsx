@@ -6,6 +6,10 @@ import './index.css';
 // Contexts
 import { useAuth } from './contexts/AuthContext';
 import { ProjectProvider } from './contexts/ProjectContext';
+import { ToastProvider } from './contexts/ToastContext'; // ▼▼▼ Import
+
+// Components
+import ToastContainer from './components/common/Toast/ToastContainer'; // ▼▼▼ Import
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
@@ -23,7 +27,7 @@ import SignUp from './components/specific/Auth/SignUp';
 import ForgotPassword from './components/specific/Auth/ForgotPassword';
 import VerifyEmail from './components/specific/Auth/VerifyEmail';
 import ResetPassword from './components/specific/Auth/ResetPassword';
-import RootDispatcher from './components/specific/Auth/RootDispatcher'; // ▼▼▼ Import
+import RootDispatcher from './components/specific/Auth/RootDispatcher';
 
 // --- AUTH GUARD (Guest Only) ---
 const AuthRoute = ({ children }: { children: React.ReactNode }) => {
@@ -65,43 +69,38 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
     return (
         <BrowserRouter>
-            <ProjectProvider>
-                <Routes>
+            {/* ▼▼▼ WRAP PROVIDER ▼▼▼ */}
+            <ToastProvider>
+                <ProjectProvider>
+                    {/* ▼▼▼ MOUNT CONTAINER ▼▼▼ */}
+                    <ToastContainer />
 
-                    {/* === PROTECTED APP ROUTES ===
-                        Note: We removed path="/" from here.
-                        RootDispatcher handles it now.
-                    */}
-                    <Route element={
-                        <ProtectedRoute>
-                            <MainLayout />
-                        </ProtectedRoute>
-                    }>
-                        <Route path="/scanner" element={<WebsiteScanner />} />
-                        <Route path="/planner" element={<CategoryManagement />} />
-                        <Route path="/analysis" element={<KeywordAnalysis />} />
-                        <Route path="/google-ads" element={<GoogleAdsManager />} />
-                    </Route>
+                    <Routes>
+                        {/* ... EXISTING ROUTES UNCHANGED ... */}
+                        <Route element={
+                            <ProtectedRoute>
+                                <MainLayout />
+                            </ProtectedRoute>
+                        }>
+                            <Route path="/scanner" element={<WebsiteScanner />} />
+                            <Route path="/planner" element={<CategoryManagement />} />
+                            <Route path="/analysis" element={<KeywordAnalysis />} />
+                            <Route path="/google-ads" element={<GoogleAdsManager />} />
+                        </Route>
 
-                    {/* === PUBLIC / AUTH ROUTES === */}
-                    <Route element={<PublicLayout />}>
-                        <Route path="/auth/signin" element={<AuthRoute><SignIn /></AuthRoute>} />
-                        <Route path="/auth/signup" element={<AuthRoute><SignUp /></AuthRoute>} />
-                        <Route path="/auth/forgot-password" element={<AuthRoute><ForgotPassword /></AuthRoute>} />
+                        <Route element={<PublicLayout />}>
+                            <Route path="/auth/signin" element={<AuthRoute><SignIn /></AuthRoute>} />
+                            <Route path="/auth/signup" element={<AuthRoute><SignUp /></AuthRoute>} />
+                            <Route path="/auth/forgot-password" element={<AuthRoute><ForgotPassword /></AuthRoute>} />
+                            <Route path="/auth/verify-email" element={<VerifyEmail />} />
+                            <Route path="/auth/reset-password" element={<ResetPassword />} />
+                        </Route>
 
-                        <Route path="/auth/verify-email" element={<VerifyEmail />} />
-                        <Route path="/auth/reset-password" element={<ResetPassword />} />
-                    </Route>
-
-                    {/* === ROOT HANDLER ===
-                        This sits outside guards to intercept the OAuth Code properly
-                    */}
-                    <Route path="/" element={<RootDispatcher />} />
-
-                    {/* Fallback */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </ProjectProvider>
+                        <Route path="/" element={<RootDispatcher />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </ProjectProvider>
+            </ToastProvider>
         </BrowserRouter>
     );
 }

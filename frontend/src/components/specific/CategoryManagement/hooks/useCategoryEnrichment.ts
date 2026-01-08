@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Group } from '../../../../types';
-import { cacheService } from '../../../../utils/cacheService'; // ▼▼▼ FIX: Import new service
+import { cacheService } from '../../../../utils/cacheService';
 import { useEnrichment } from '../../../../hooks/useEnrichment';
+import { useToast } from '../../../../hooks/useToast';
 
 interface Props {
     countryId?: string;
@@ -16,6 +17,7 @@ export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSel
     const [newKeywordsByGroup, setNewKeywordsByGroup] = useState<Map<string, Set<string>>>(new Map());
 
     const { mutateAsync: enrichKeywordsApi } = useEnrichment();
+    const toast = useToast();
 
     const clearNewKeywords = () => {
         setNewKeywordsByGroup(new Map());
@@ -23,7 +25,7 @@ export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSel
 
     const enrichGroup = async (group: Group) => {
         if (!countryId || !languageId) {
-            alert("Please select a Country and Language.");
+            toast.warning("Please select a Country and Language before enriching.", "Missing Configuration");
             return;
         }
 
@@ -41,8 +43,6 @@ export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSel
                 countryId
             });
 
-            // ▼▼▼ FIX: Use the new cacheService.saveBatch method ▼▼▼
-            // We pass [] for forecasts because enrichment only fetches history.
             cacheService.saveBatch(countryId, languageId, response.results, []);
 
             // Create a set of existing keyword TEXTs
@@ -62,6 +62,12 @@ export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSel
             if (keywordsToAdd.length > 0) {
                 // Optimistically add to project
                 await onBulkAdd({ groupId: group.id, keywords: keywordsToAdd });
+            } else {
+                // ▼▼▼ FIX: Inform user if no NEW keywords were found ▼▼▼
+                toast.warning(
+                    `No new related keywords were found for "${group.name}".`,
+                    "Enrichment Result"
+                );
             }
 
             setNewKeywordsByGroup(prev => {
@@ -82,6 +88,10 @@ export const useCategoryEnrichment = ({ countryId, languageId, onBulkAdd, setSel
 
         } catch (err) {
             console.error(`Failed to enrich group ${group.name}`, err);
+            toast.error(
+                `Could not enrich "${group.name}". Check your internet connection or try again later.`,
+                "Enrichment Failed"
+            );
         } finally {
             setEnrichingGroupIds(prev => {
                 const next = new Set(prev);

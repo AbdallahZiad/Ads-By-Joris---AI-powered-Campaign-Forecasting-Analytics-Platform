@@ -7,13 +7,14 @@ import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useToast } from '../../../hooks/useToast';
 
 const SignIn: React.FC = () => {
     const { login } = useAuth();
     const navigate = useNavigate();
+    const toast = useToast();
 
     const [formData, setFormData] = useState({ email: '', password: '' });
-    const [errorMsg, setErrorMsg] = useState('');
 
     const loginMutation = useMutation({
         mutationFn: authService.login,
@@ -21,7 +22,15 @@ const SignIn: React.FC = () => {
             login(data);
         },
         onError: (error: Error) => {
-            setErrorMsg(error.message || 'Invalid email or password.');
+            // ▼▼▼ FIX: Handle Offline/Network Errors Gracefully ▼▼▼
+            const isNetworkError = error.message === 'Failed to fetch';
+
+            toast.error(
+                isNetworkError
+                    ? 'Unable to connect to the server. Please check your internet connection.'
+                    : error.message || 'Invalid email or password. Please try again.',
+                isNetworkError ? 'Connection Error' : 'Sign In Failed'
+            );
         }
     });
 
@@ -32,7 +41,14 @@ const SignIn: React.FC = () => {
         },
         onError: (error: Error) => {
             console.error(error);
-            setErrorMsg(error.message || 'Google sign-in failed.');
+            const isNetworkError = error.message === 'Failed to fetch';
+
+            toast.error(
+                isNetworkError
+                    ? 'Unable to connect to the server. Please check your connection.'
+                    : 'Could not authenticate with Google. Please try again.',
+                isNetworkError ? 'Connection Error' : 'Google Sign-In Failed'
+            );
         }
     });
 
@@ -46,20 +62,18 @@ const SignIn: React.FC = () => {
         }
     }, []);
 
-    // ▼▼▼ FIX: Dynamic Redirect URI ▼▼▼
     const loginWithGoogle = useGoogleLogin({
         flow: 'auth-code',
         ux_mode: 'redirect',
-        redirect_uri: window.location.origin, // Dynamically set based on current domain
+        redirect_uri: window.location.origin,
         onError: (error) => {
             console.error('Google Login Error:', error);
-            setErrorMsg('Google Sign-In failed to initialize.');
+            toast.error('Google Sign-In failed to initialize. Please reload the page.', 'Connection Error');
         }
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setErrorMsg('');
         loginMutation.mutate(formData);
     };
 
@@ -97,12 +111,6 @@ const SignIn: React.FC = () => {
                         </button>
                     </div>
                 </div>
-
-                {errorMsg && (
-                    <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm font-medium border border-red-100">
-                        {errorMsg}
-                    </div>
-                )}
 
                 <button
                     type="submit"

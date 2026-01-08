@@ -1,9 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Category as CategoryType, Group as GroupType } from '../../../types';
 import DataSourceSettings from './DataSourceSettings';
 import styles from './CategoryManagement.module.css';
 import { useProject } from '../../../contexts/ProjectContext';
+import { useToast } from '../../../hooks/useToast'; // ▼▼▼ Import
 
 // Hooks
 import { useProjectSync } from './hooks/useProjectSync';
@@ -21,6 +22,7 @@ import { HiPlus, HiOutlineTemplate } from 'react-icons/hi';
 const CategoryManagement: React.FC = () => {
     const navigate = useNavigate();
     const { currentProjectId, setCurrentProjectId, setAnalysisInputs, clearProjectAnalysis } = useProject();
+    const toast = useToast(); // ▼▼▼ Initialize
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +39,7 @@ const CategoryManagement: React.FC = () => {
         projects,
         activeProject,
         isLoadingActive,
+        isError: isProjectError, // ▼▼▼ Capture error state
         createProject,
         updateProject,
         deleteProject,
@@ -49,6 +52,13 @@ const CategoryManagement: React.FC = () => {
         bulkAddKeywords,
         deleteKeyword
     } = useProjectSync(currentProjectId);
+
+    // ▼▼▼ Global Error Handler for Project Loading ▼▼▼
+    useEffect(() => {
+        if (isProjectError) {
+            toast.error("Failed to load project data. Please check your connection.", "Load Error");
+        }
+    }, [isProjectError, toast]);
 
     const categories = activeProject?.categories || [];
 
@@ -83,7 +93,8 @@ const CategoryManagement: React.FC = () => {
             const newProj = await createProject({ title });
             setCurrentProjectId(newProj.id);
         } catch (e) {
-            console.error("Failed to create project");
+            console.error("Failed to create project", e);
+            toast.error("Could not create project. Please try again.");
         }
     };
 
@@ -91,7 +102,8 @@ const CategoryManagement: React.FC = () => {
         try {
             await updateProject({ id, title });
         } catch (e) {
-            console.error("Failed to rename project");
+            console.error("Failed to rename project", e);
+            toast.error("Could not rename project.");
         }
     };
 
@@ -103,19 +115,20 @@ const CategoryManagement: React.FC = () => {
                 setCurrentProjectId(null);
             }
         } catch (e) {
-            console.error("Failed to delete project");
-            alert("Failed to delete project.");
+            console.error("Failed to delete project", e);
+            toast.error("Could not delete project.");
         }
     };
 
     const handleAddCategory = () => {
         if (!currentProjectId) return;
 
-        // ▼▼▼ FIX: Fire and forget (Optimistic Update handles the UI) ▼▼▼
         createCategory({ projectId: currentProjectId, name: "New Category" })
-            .catch(e => console.error("Failed to create category", e));
+            .catch(e => {
+                console.error("Failed to create category", e);
+                toast.error("Failed to add category.");
+            });
 
-        // Scroll immediately to the optimistic item
         setTimeout(() => {
             if (scrollContainerRef.current) {
                 scrollContainerRef.current.scrollTo({
@@ -127,9 +140,11 @@ const CategoryManagement: React.FC = () => {
     };
 
     const handleAddGroup = (catId: string) => {
-        // Optimistic update handles UI logic in useProjectSync
         createGroup({ categoryId: catId, name: "New Group" })
-            .catch(e => console.error("Failed to create group", e));
+            .catch(e => {
+                console.error("Failed to create group", e);
+                toast.error("Failed to add group.");
+            });
     };
 
     const handleKeywordSave = async (catId: string, grpId: string, newKeywordsList: string[]) => {
@@ -156,7 +171,7 @@ const CategoryManagement: React.FC = () => {
             await Promise.all(promises);
         } catch (e) {
             console.error("Failed to sync keywords", e);
-            alert("Failed to save keywords.");
+            toast.error("Failed to save keywords.");
         }
     };
 
@@ -203,7 +218,8 @@ const CategoryManagement: React.FC = () => {
         });
 
         if (selection.length === 0) {
-            alert("Please select at least one keyword to run analysis on.");
+            // ▼▼▼ FIX: Replaced alert with warning toast ▼▼▼
+            toast.warning("Please select at least one keyword to run analysis.");
             return;
         }
         runAnalysisWithContext(selection);
@@ -220,7 +236,8 @@ const CategoryManagement: React.FC = () => {
         });
 
         if (groupsToEnrich.length === 0) {
-            alert("No groups selected for enrichment.");
+            // ▼▼▼ FIX: Replaced alert with warning toast ▼▼▼
+            toast.warning("No groups selected for enrichment.");
             return;
         }
 
@@ -250,8 +267,11 @@ const CategoryManagement: React.FC = () => {
     const totalSelections = selectedCategoryIds.size + selectedGroupIds.size + selectedKeywordsByGroup.size;
 
     return (
-        <PageLayout className="h-full flex flex-col bg-gray-50">
-            <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
+        <PageLayout className="h-full flex flex-col bg-gray-50 relative overflow-hidden">
+            <div
+                className={`flex-1 overflow-y-auto ${styles.noScrollbar}`}
+                ref={scrollContainerRef}
+            >
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
                     <div className="flex justify-between items-start mb-8">

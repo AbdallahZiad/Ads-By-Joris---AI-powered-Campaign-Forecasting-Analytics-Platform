@@ -3,6 +3,7 @@ import { AnalyzedCategory, Category, GoogleAdsKeywordResponse, ForecastResponse,
 import { analysisService } from '../api/services/analysisService';
 import { useTaskPoller } from './useTaskPoller';
 import { cacheService } from '../utils/cacheService';
+import { useToast } from './useToast'; // ▼▼▼ Import
 
 interface FreshDataContext {
     history: GoogleAdsKeywordResponse | null;
@@ -16,6 +17,8 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
     const [freshData, setFreshData] = useState<FreshDataContext | null>(null);
     const [isFetchingHistory, setIsFetchingHistory] = useState(true);
     const [isForecasting, setIsForecasting] = useState(false);
+
+    const toast = useToast(); // ▼▼▼ Initialize
 
     const lastConfigRef = useRef<string>("");
 
@@ -59,7 +62,8 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
             console.error("Forecast task failed", err);
             pendingForecastKeywords.current = [];
             setIsForecasting(false);
-            alert("Forecast Analysis failed. Please try again.");
+            // ▼▼▼ FIX: Replaced Alert with Toast ▼▼▼
+            toast.error("Unable to generate keyword forecasts at this time.", "Forecasting Failed");
         }
     });
 
@@ -111,8 +115,7 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
         const executeAnalysisChain = async () => {
             if (!selection || selection.length === 0 || !countryId || !languageId) return;
 
-            // ▼▼▼ FIX: Robust Config Signature (IDs based) instead of just length ▼▼▼
-            // This ensures switching from "Group A" to "Group B" (same length) triggers a refresh.
+            // Robust Config Signature (IDs based)
             const selectionIdStr = JSON.stringify(
                 selection.map(c => ({
                     id: c.id,
@@ -197,7 +200,8 @@ export const useKeywordAnalysis = (selection: Category[], countryId?: string, la
                 console.error("Analysis chain failed", err);
                 setIsFetchingHistory(false);
                 setIsForecasting(false);
-                alert("Failed to retrieve data.");
+                // ▼▼▼ FIX: Replaced Alert with Toast ▼▼▼
+                toast.error("Failed to retrieve metrics. Please check your connection and try again.", "Analysis Error");
             }
         };
 

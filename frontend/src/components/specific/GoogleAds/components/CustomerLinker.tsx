@@ -4,6 +4,7 @@ import { HiOutlineOfficeBuilding, HiCheck, HiExclamation } from 'react-icons/hi'
 import { googleAdsService } from '../../../../api/services/googleAdsService';
 import { Project, SelectOption } from '../../../../types';
 import SearchableSelect from '../../../common/SearchableSelect/SearchableSelect';
+import { useToast } from '../../../../hooks/useToast'; // ▼▼▼ Import
 
 interface Props {
     activeProject: Project;
@@ -12,6 +13,7 @@ interface Props {
 
 const CustomerLinker: React.FC<Props> = ({ activeProject, onLinkingStateChange }) => {
     const queryClient = useQueryClient();
+    const toast = useToast(); // ▼▼▼ Initialize
 
     const [selectedOption, setSelectedOption] = useState<SelectOption | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -82,7 +84,8 @@ const CustomerLinker: React.FC<Props> = ({ activeProject, onLinkingStateChange }
             if (context?.previousProject) {
                 queryClient.setQueryData(['project', activeProject.id], context.previousProject);
             }
-            alert("Failed to link customer.");
+            // ▼▼▼ FIX: Toast error ▼▼▼
+            toast.error("Failed to link customer account. Please try again.");
         },
         onSettled: () => {
             onLinkingStateChange(false);
@@ -92,10 +95,7 @@ const CustomerLinker: React.FC<Props> = ({ activeProject, onLinkingStateChange }
     const handleSave = () => {
         if (!selectedOption) return;
 
-        // Check if we are changing an existing link
         if (activeProject.linked_customer_id && activeProject.linked_customer_id !== selectedOption.id) {
-
-            // ▼▼▼ SMART CHECK: Only warn if we actually have downstream data to lose ▼▼▼
             const hasDownstreamLinks = activeProject.categories.some(cat =>
                 cat.google_campaign_id || cat.groups.some(grp => grp.google_ad_group_id)
             );

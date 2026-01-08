@@ -15,7 +15,7 @@ const Navbar: React.FC = () => {
                     />
                     <div className={styles.separator}></div>
                     <h1 className={styles.productTitle}>
-                        Strategy Platform
+                        MyNextCampaign
                     </h1>
                 </div>
 

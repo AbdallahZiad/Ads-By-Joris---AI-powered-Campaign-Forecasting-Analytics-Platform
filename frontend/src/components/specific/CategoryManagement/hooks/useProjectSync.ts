@@ -30,6 +30,7 @@ export const useProjectSync = (currentProjectId: string | null) => {
             projectService.updateProject(vars.id, { title: vars.title }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects-list'] });
+            // For the active project title, we can invalidate as it's not a list order issue
             queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
         }
     });
@@ -43,7 +44,6 @@ export const useProjectSync = (currentProjectId: string | null) => {
 
     // --- Category Mutations ---
 
-    // ▼▼▼ FIX: Optimistic Update + Manual Cache Update (No Invalidation) ▼▼▼
     const createCategoryMutation = useMutation({
         mutationFn: (vars: { projectId: string, name: string }) =>
             projectService.createCategory(vars.projectId, { name: vars.name }),
@@ -70,7 +70,6 @@ export const useProjectSync = (currentProjectId: string | null) => {
             return { previous, tempId };
         },
         onSuccess: (data, _vars, context) => {
-            // Replace the temp category with the real one, preserving order
             const current = queryClient.getQueryData<Project>(['project', currentProjectId]);
             if (current && context?.tempId) {
                 queryClient.setQueryData<Project>(['project', currentProjectId], {
@@ -80,7 +79,6 @@ export const useProjectSync = (currentProjectId: string | null) => {
                     )
                 });
             }
-            // DO NOT INVALIDATE here to prevent re-ordering
         },
         onError: (_err, _vars, context) => {
             if (context?.previous) {
@@ -110,18 +108,19 @@ export const useProjectSync = (currentProjectId: string | null) => {
             if (context?.previous) {
                 queryClient.setQueryData(['project', currentProjectId], context.previous);
             }
-        },
-        onSettled: () => queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] })
+        }
+        // ▼▼▼ FIX: Removed onSettled invalidation to prevent list reordering/jumping ▼▼▼
     });
 
     const deleteCategoryMutation = useMutation({
         mutationFn: projectService.deleteCategory,
+        // Deletion shrinks the list, so invalidation is safer here to ensure sync,
+        // but typically manual removal is smoother. For now, invalidation is acceptable for delete.
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] })
     });
 
     // --- Group Mutations ---
 
-    // ▼▼▼ FIX: Optimistic Update + Manual Cache Update (No Invalidation) ▼▼▼
     const createGroupMutation = useMutation({
         mutationFn: (vars: { categoryId: string, name: string }) =>
             projectService.createGroup(vars.categoryId, { name: vars.name }),
@@ -152,7 +151,6 @@ export const useProjectSync = (currentProjectId: string | null) => {
             return { previous, tempId };
         },
         onSuccess: (data, vars, context) => {
-            // Replace temp group with real one
             const current = queryClient.getQueryData<Project>(['project', currentProjectId]);
             if (current && context?.tempId) {
                 queryClient.setQueryData<Project>(['project', currentProjectId], {
@@ -170,7 +168,6 @@ export const useProjectSync = (currentProjectId: string | null) => {
                     })
                 });
             }
-            // DO NOT INVALIDATE
         },
         onError: (_err, _vars, context) => {
             if (context?.previous) {
@@ -179,10 +176,33 @@ export const useProjectSync = (currentProjectId: string | null) => {
         }
     });
 
+    // ▼▼▼ FIX: Added Optimistic Update for Groups to prevent jumping ▼▼▼
     const updateGroupMutation = useMutation({
         mutationFn: (vars: { id: string, name: string }) =>
             projectService.updateGroup(vars.id, { name: vars.name }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] })
+        onMutate: async (newItem) => {
+            await queryClient.cancelQueries({ queryKey: ['project', currentProjectId] });
+            const previous = queryClient.getQueryData<Project>(['project', currentProjectId]);
+
+            if (previous) {
+                queryClient.setQueryData<Project>(['project', currentProjectId], {
+                    ...previous,
+                    categories: previous.categories.map(c => ({
+                        ...c,
+                        groups: c.groups.map(g =>
+                            g.id === newItem.id ? { ...g, name: newItem.name } : g
+                        )
+                    }))
+                });
+            }
+            return { previous };
+        },
+        onError: (_err, _vars, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(['project', currentProjectId], context.previous);
+            }
+        }
+        // Removed onSuccess invalidation
     });
 
     const deleteGroupMutation = useMutation({

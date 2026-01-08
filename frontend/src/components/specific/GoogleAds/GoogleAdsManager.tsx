@@ -11,7 +11,8 @@ import { useProjectSync } from '../CategoryManagement/hooks/useProjectSync';
 import ProjectSelector from '../CategoryManagement/components/ProjectSelector';
 import { googleAdsService } from '../../../api/services/googleAdsService';
 import { Project, LabelingReport } from '../../../types';
-import { useTaskPoller } from '../../../hooks/useTaskPoller'; // Poller Import
+import { useTaskPoller } from '../../../hooks/useTaskPoller';
+import { useToast } from '../../../hooks/useToast';
 
 // Components
 import CustomerLinker from './components/CustomerLinker';
@@ -22,6 +23,7 @@ const GoogleAdsManager: React.FC = () => {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const { currentProjectId, setCurrentProjectId } = useProject();
+    const toast = useToast();
 
     // State to coordinate the race condition for manual linking
     const [isLinkingCustomer, setIsLinkingCustomer] = useState(false);
@@ -40,13 +42,22 @@ const GoogleAdsManager: React.FC = () => {
     // --- TASK POLLER: Labeling ---
     const labelingPoller = useTaskPoller<LabelingReport>({
         onSuccess: async (data) => {
-            // Refresh project data to show new labels
             await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
-            alert(`Analysis & Labeling Complete!\n\nAdded Labels to:\n• ${data.categories.count} Categories\n• ${data.groups.count} Groups\n• ${data.keywords.count} Keywords\n\nSynced to Google Ads: ${data.synced_to_google ? "Yes ✅" : "No ❌"}`);
+
+            const totalLabeled = data.categories.count + data.groups.count + data.keywords.count;
+
+            if (totalLabeled === 0) {
+                toast.warning("No labels were applied. The AI could not determine new insights for your structure.", "Labeling Complete");
+            } else {
+                toast.success(
+                    `Labeled ${data.categories.count} Categories, ${data.groups.count} Groups, and ${data.keywords.count} Keywords. ${data.synced_to_google ? "Synced to Google Ads." : ""}`,
+                    "Analysis & Labeling Successful"
+                );
+            }
         },
         onError: (err) => {
             console.error("Labeling task failed:", err);
-            alert(`Labeling failed: ${err}`);
+            toast.error(`The labeling process failed. Please try again.`, "Labeling Failed");
         }
     });
 
@@ -57,11 +68,19 @@ const GoogleAdsManager: React.FC = () => {
             await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
             await queryClient.invalidateQueries({ queryKey: ['google-ads-campaigns'] });
             await queryClient.invalidateQueries({ queryKey: ['google-ads-adgroups'] });
-            alert(`Auto-Linking Complete!\n\nMatched ${data.categories_matched} Categories\nMatched ${data.groups_matched} Groups`);
+
+            if (data.categories_matched === 0 && data.groups_matched === 0) {
+                toast.warning("No matches found. Ensure your category names closely match your Google Ads Campaigns.", "Auto-Link Result");
+            } else {
+                toast.success(
+                    `Successfully matched ${data.categories_matched} Categories and ${data.groups_matched} Ad Groups.`,
+                    "Auto-Linking Complete"
+                );
+            }
         },
         onError: (error: any) => {
             console.error("Auto-link failed", error);
-            alert("Auto-linking failed. Please ensure your project is linked to a valid Customer Account.");
+            toast.error("Auto-linking failed. Please ensure your project is linked to a valid Customer Account.", "Link Error");
         }
     });
 
@@ -69,12 +88,12 @@ const GoogleAdsManager: React.FC = () => {
     const applyLabelsMutation = useMutation({
         mutationFn: (projectId: string) => googleAdsService.applyLabels(projectId),
         onSuccess: (data) => {
-            // Start Polling with the returned task_id
             labelingPoller.startPolling(data.task_id);
+            toast.info("AI Analysis started. This may take a moment...", "Labeling in Progress");
         },
         onError: (err) => {
             console.error(err);
-            alert("Failed to start labeling task. Please check network connection.");
+            toast.error("Failed to start the labeling task. Please check your network connection.", "Request Failed");
         }
     });
 
@@ -105,22 +124,22 @@ const GoogleAdsManager: React.FC = () => {
         },
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+            toast.success("All AI-generated labels have been removed from this project.", "Labels Cleared");
         },
         onError: (_err, _newVal, context) => {
             if (context?.previousProject) {
                 queryClient.setQueryData(['project', currentProjectId], context.previousProject);
             }
-            alert("Failed to clear labels.");
+            toast.error("Failed to clear labels. Changes reverted.", "Operation Failed");
         }
     });
 
     const isAnyActionPending = autoLinkMutation.isPending || applyLabelsMutation.isPending || removeLabelsMutation.isPending || labelingPoller.isLoading;
 
-    // ▼▼▼ FIX: Dynamic Redirect URI ▼▼▼
     const linkGoogleAds = useGoogleLogin({
         flow: 'auth-code',
         ux_mode: 'redirect',
-        redirect_uri: window.location.origin, // Dynamically set based on current domain
+        redirect_uri: window.location.origin,
         scope: 'https://www.googleapis.com/auth/adwords',
         select_account: true,
     });
@@ -131,6 +150,7 @@ const GoogleAdsManager: React.FC = () => {
             setCurrentProjectId(newProj.id);
         } catch (e) {
             console.error("Failed to create project");
+            toast.error("Could not create project.");
         }
     };
 
@@ -139,6 +159,7 @@ const GoogleAdsManager: React.FC = () => {
             await updateProject({ id, title });
         } catch (e) {
             console.error("Failed to rename project");
+            toast.error("Could not rename project.");
         }
     };
 
@@ -148,14 +169,14 @@ const GoogleAdsManager: React.FC = () => {
             if (id === currentProjectId) setCurrentProjectId(null);
         } catch (e) {
             console.error("Failed to delete project");
+            toast.error("Could not delete project.");
         }
     };
 
     const handleAutoLink = () => {
         if (currentProjectId) {
-            if (window.confirm("This will use AI to automatically match your Categories and Groups to Google Ads Campaigns and Ad Groups based on name similarity.\n\nContinue?")) {
-                autoLinkMutation.mutate(currentProjectId);
-            }
+            // ▼▼▼ FIX: Removed crude window.confirm alert ▼▼▼
+            autoLinkMutation.mutate(currentProjectId);
         }
     };
 

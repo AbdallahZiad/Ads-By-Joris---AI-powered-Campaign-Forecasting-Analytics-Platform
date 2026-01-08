@@ -4,6 +4,7 @@ import { HiOutlineViewGrid, HiOutlineCollection } from 'react-icons/hi';
 import { Project, Category, Group, SelectOption } from '../../../../types';
 import { googleAdsService } from '../../../../api/services/googleAdsService';
 import SearchableSelect from '../../../common/SearchableSelect/SearchableSelect';
+import { useToast } from '../../../../hooks/useToast'; // ▼▼▼ Import
 
 interface Props {
     project: Project;
@@ -56,7 +57,6 @@ const MappingSection: React.FC<Props> = ({ project, isLinkingCustomer }) => {
 
 // --- Helper: Semantic Label Badge ---
 const getLabelStyle = (label: string): string => {
-    // Semantic Color Mapping
     if (label.includes("Trending Up")) return "bg-green-50 text-green-700 border-green-200";
     if (label.includes("Trending Down")) return "bg-red-50 text-red-700 border-red-200";
     if (label.includes("Stable")) return "bg-slate-50 text-slate-600 border-slate-200";
@@ -65,14 +65,11 @@ const getLabelStyle = (label: string): string => {
     if (label.includes("Hidden Gem")) return "bg-purple-50 text-purple-700 border-purple-200";
     if (label.includes("High Cost")) return "bg-rose-50 text-rose-700 border-rose-200";
     if (label.includes("Low Data")) return "bg-gray-100 text-gray-500 border-gray-200";
-
-    // Default / Unknown Labels (Fallback)
     return "bg-indigo-50 text-indigo-700 border-indigo-200";
 };
 
 const LabelBadge: React.FC<{ label: string }> = ({ label }) => {
     const colorClass = getLabelStyle(label);
-
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border mr-1.5 mb-1 tracking-wide whitespace-nowrap ${colorClass}`}>
             {label}
@@ -82,6 +79,7 @@ const LabelBadge: React.FC<{ label: string }> = ({ label }) => {
 
 const CategoryMapper: React.FC<{ projectId: string, category: Category, campaignOptions: SelectOption[] }> = ({ projectId, category, campaignOptions }) => {
     const queryClient = useQueryClient();
+    const toast = useToast(); // ▼▼▼ Initialize
 
     const linkCampaignMutation = useMutation({
         mutationFn: (campaignId: string) => googleAdsService.linkCategoryToCampaign(category.id, campaignId),
@@ -113,7 +111,8 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
             if (context?.previousProject) {
                 queryClient.setQueryData(['project', projectId], context.previousProject);
             }
-            alert("Failed to link campaign.");
+            // ▼▼▼ FIX: Toast error ▼▼▼
+            toast.error("Failed to map campaign.");
         },
         onSettled: async () => {
             await queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -127,7 +126,6 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
         return [...category.groups].sort((a, b) => a.name.localeCompare(b.name));
     }, [category.groups]);
 
-    // ▼▼▼ FIX: Deterministic Sort for Labels ▼▼▼
     const sortedLabels = useMemo(() => {
         if (!category.applied_labels) return [];
         return [...category.applied_labels].sort();
@@ -136,11 +134,8 @@ const CategoryMapper: React.FC<{ projectId: string, category: Category, campaign
     return (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-b border-gray-200">
-
-                {/* ▼▼▼ Category Name & Labels (INLINE) ▼▼▼ */}
                 <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-bold text-gray-800 text-lg">{category.name}</span>
-
                     {sortedLabels.length > 0 && (
                         <div className="flex items-center gap-1.5">
                             {sortedLabels.map((label, idx) => (
@@ -207,6 +202,7 @@ interface GroupMapperProps {
 
 const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, currentCampaignId, group, isParentLinking }) => {
     const queryClient = useQueryClient();
+    const toast = useToast(); // ▼▼▼ Initialize
 
     const { data: adGroupData, isLoading } = useQuery({
         queryKey: ['google-ads-adgroups', categoryId, currentCampaignId],
@@ -243,7 +239,8 @@ const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, curren
             if (context?.previousProject) {
                 queryClient.setQueryData(['project', projectId], context.previousProject);
             }
-            alert("Failed to link ad group.");
+            // ▼▼▼ FIX: Toast error ▼▼▼
+            toast.error("Failed to map ad group.");
         },
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -257,7 +254,6 @@ const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, curren
 
     const currentOption = adGroupOptions.find(ag => ag.id === group.google_ad_group_id) || null;
 
-    // ▼▼▼ FIX: Deterministic Sort for Labels ▼▼▼
     const sortedLabels = useMemo(() => {
         if (!group.applied_labels) return [];
         return [...group.applied_labels].sort();
@@ -265,7 +261,6 @@ const GroupMapper: React.FC<GroupMapperProps> = ({ projectId, categoryId, curren
 
     return (
         <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 px-3 rounded transition-colors">
-            {/* ▼▼▼ Group Name & Labels (INLINE) ▼▼▼ */}
             <div className="flex items-center gap-3 overflow-hidden">
                 <div className="flex items-center gap-2 min-w-0">
                     <HiOutlineCollection className="text-gray-400 flex-shrink-0" />

@@ -6,13 +6,14 @@ import AuthLayout from './AuthLayout';
 import AuthInput from './AuthInput';
 import { authService } from '../../../api/services/authService';
 import { HiCheckCircle, HiRefresh, HiCheck } from 'react-icons/hi';
+import { useToast } from '../../../hooks/useToast';
 
 const SignUp: React.FC = () => {
     const navigate = useNavigate();
+    const toast = useToast();
 
     const [formData, setFormData] = useState({ full_name: '', email: '', password: '' });
     const [success, setSuccess] = useState(false);
-    const [errorMsg, setErrorMsg] = useState('');
 
     const [timeLeft, setTimeLeft] = useState(15 * 60);
     const [resendCooldown, setResendCooldown] = useState(60);
@@ -25,9 +26,18 @@ const SignUp: React.FC = () => {
             setSuccess(true);
             setTimeLeft(15 * 60);
             setResendCooldown(60);
+            toast.success("Account created! Please check your email.", "Welcome");
         },
         onError: (error: Error) => {
-            setErrorMsg(error.message || 'Registration failed. Please try again.');
+            // ▼▼▼ FIX: Handle Offline/Network Errors Gracefully ▼▼▼
+            const isNetworkError = error.message === 'Failed to fetch';
+
+            toast.error(
+                isNetworkError
+                    ? 'Unable to connect to the server. Please check your internet connection.'
+                    : error.message || 'Registration failed. Please try again.',
+                isNetworkError ? 'Connection Error' : 'Sign Up Failed'
+            );
         }
     });
 
@@ -37,11 +47,18 @@ const SignUp: React.FC = () => {
             setResendStatus('success');
             setTimeLeft(15 * 60);
             setResendCooldown(60);
+            toast.success("Verification email resent.");
             setTimeout(() => setResendStatus('idle'), 3000);
         },
         onError: (error: Error) => {
             console.error("Resend failed:", error);
             setResendStatus('error');
+
+            // Handle Network Error on Resend too
+            const isNetworkError = error.message === 'Failed to fetch';
+            toast.error(
+                isNetworkError ? "Connection lost. Could not resend email." : "Failed to resend verification email."
+            );
             setTimeout(() => setResendStatus('idle'), 3000);
         }
     });
@@ -76,9 +93,9 @@ const SignUp: React.FC = () => {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setErrorMsg('');
+
         if (formData.password.length < 8) {
-            setErrorMsg('Password must be at least 8 characters long.');
+            toast.warning('Password must be at least 8 characters long.', 'Weak Password');
             return;
         }
         signupMutation.mutate(formData);
@@ -185,11 +202,7 @@ const SignUp: React.FC = () => {
                     required
                 />
 
-                {errorMsg && (
-                    <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm font-medium border border-red-100">
-                        {errorMsg}
-                    </div>
-                )}
+                {/* Removed Inline Error Div */}
 
                 <button
                     type="submit"
@@ -203,7 +216,6 @@ const SignUp: React.FC = () => {
                     Already have an account?{' '}
                     <button
                         type="button"
-                        // ▼▼▼ FIX: Use hook navigation instead of missing onNavigate prop ▼▼▼
                         onClick={() => navigate('/auth/signin')}
                         className="font-semibold text-teal-600 hover:text-teal-700 transition-colors"
                     >
